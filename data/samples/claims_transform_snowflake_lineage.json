@@ -1,0 +1,210 @@
+{
+  "schema_version": "1.0.0",
+  "package_id": "snowflake-claims-seed",
+  "project": {
+    "name": "Claims Analytics Modernization",
+    "business_domain": "Claims",
+    "migration_wave": "Wave 1"
+  },
+  "source_document": {
+    "document_id": "doc-snow-001",
+    "file_name": "claims_transform.sql",
+    "file_type": "SNOWFLAKE_SQL",
+    "system": "Snowflake",
+    "parser": "AI",
+    "parser_version": "demo-1",
+    "extraction_timestamp": "2026-06-18T00:00:00Z"
+  },
+  "assets": [
+    {
+      "asset_key": "snow_program",
+      "system_name": "Snowflake",
+      "environment": "PROD",
+      "namespace": "sql",
+      "qualified_name": "claims_transform.sql",
+      "display_name": "sql",
+      "asset_type": "SCRIPT"
+    },
+    {
+      "asset_key": "snow_raw_claims",
+      "system_name": "Snowflake",
+      "environment": "PROD",
+      "namespace": "RAW",
+      "qualified_name": "RAW.CLAIMS",
+      "display_name": "CLAIMS",
+      "asset_type": "TABLE"
+    },
+    {
+      "asset_key": "snow_clean",
+      "system_name": "Snowflake",
+      "environment": "PROD",
+      "namespace": "CURATED",
+      "qualified_name": "CURATED.CLAIMS_CLEAN",
+      "display_name": "CLAIMS_CLEAN",
+      "asset_type": "TABLE"
+    },
+    {
+      "asset_key": "snow_summary",
+      "system_name": "Snowflake",
+      "environment": "PROD",
+      "namespace": "MART",
+      "qualified_name": "MART.CLAIMS_SUMMARY",
+      "display_name": "CLAIMS_SUMMARY",
+      "asset_type": "TABLE"
+    }
+  ],
+  "columns": [
+    {
+      "asset_ref": "snow_raw_claims",
+      "column_name": "claim_id",
+      "ordinal_position": 1,
+      "data_type": "CHAR"
+    },
+    {
+      "asset_ref": "snow_raw_claims",
+      "column_name": "loss_amount",
+      "ordinal_position": 2,
+      "data_type": "NUM"
+    },
+    {
+      "asset_ref": "snow_raw_claims",
+      "column_name": "expense_amount",
+      "ordinal_position": 3,
+      "data_type": "NUM"
+    },
+    {
+      "asset_ref": "snow_raw_claims",
+      "column_name": "accident_date",
+      "ordinal_position": 4,
+      "data_type": "DATE"
+    },
+    {
+      "asset_ref": "snow_clean",
+      "column_name": "claim_id",
+      "data_type": "CHAR"
+    },
+    {
+      "asset_ref": "snow_clean",
+      "column_name": "paid_loss_amount",
+      "data_type": "NUM"
+    },
+    {
+      "asset_ref": "snow_clean",
+      "column_name": "paid_expense_amount",
+      "data_type": "NUM"
+    },
+    {
+      "asset_ref": "snow_summary",
+      "column_name": "total_incurred",
+      "data_type": "NUM"
+    },
+    {
+      "asset_ref": "snow_summary",
+      "column_name": "accident_month",
+      "data_type": "CHAR"
+    }
+  ],
+  "processes": [
+    {
+      "process_key": "snow_clean_step",
+      "system_name": "Snowflake",
+      "process_type": "Snowflake SQL",
+      "process_name": "Clean claims DATA step",
+      "sequence_number": 1,
+      "source_code_reference": "claims_transform.sql",
+      "code_snippet": "data work.claims_clean; set raw.claims;",
+      "confidence_score": 0.91
+    },
+    {
+      "process_key": "snow_summary_step",
+      "system_name": "Snowflake",
+      "process_type": "Snowflake SQL",
+      "process_name": "Summarize claims PROC SQL",
+      "sequence_number": 2,
+      "source_code_reference": "claims_transform.sql",
+      "code_snippet": "create table mart.claims_summary as select ...",
+      "confidence_score": 0.88
+    }
+  ],
+  "lineage_edges": [
+    {
+      "source_asset_ref": "snow_raw_claims",
+      "target_asset_ref": "snow_clean",
+      "process_ref": "snow_clean_step",
+      "lineage_level": "TABLE",
+      "transformation_type": "FILTERED",
+      "transformation_expression": "Filter invalid claims and rename paid amounts",
+      "evidence_code_snippet": "set raw.claims; if claim_id ne '';",
+      "confidence_score": 0.91
+    },
+    {
+      "source_asset_ref": "snow_clean",
+      "target_asset_ref": "snow_summary",
+      "process_ref": "snow_summary_step",
+      "lineage_level": "TABLE",
+      "transformation_type": "AGGREGATED",
+      "transformation_expression": "Aggregate clean claims by accident month",
+      "evidence_code_snippet": "group by accident_month",
+      "confidence_score": 0.88
+    },
+    {
+      "source_asset_ref": "snow_raw_claims",
+      "source_column": "claim_id",
+      "target_asset_ref": "snow_clean",
+      "target_column": "claim_id",
+      "process_ref": "snow_clean_step",
+      "lineage_level": "COLUMN",
+      "transformation_type": "DIRECT_COPY",
+      "transformation_expression": "claim_id",
+      "confidence_score": 0.95
+    },
+    {
+      "source_asset_ref": "snow_raw_claims",
+      "source_column": "loss_amount",
+      "target_asset_ref": "snow_clean",
+      "target_column": "paid_loss_amount",
+      "process_ref": "snow_clean_step",
+      "lineage_level": "COLUMN",
+      "transformation_type": "RENAME",
+      "transformation_expression": "loss_amount as paid_loss_amount",
+      "confidence_score": 0.92
+    },
+    {
+      "source_asset_ref": "snow_raw_claims",
+      "source_column": "expense_amount",
+      "target_asset_ref": "snow_clean",
+      "target_column": "paid_expense_amount",
+      "process_ref": "snow_clean_step",
+      "lineage_level": "COLUMN",
+      "transformation_type": "RENAME",
+      "transformation_expression": "expense_amount as paid_expense_amount",
+      "confidence_score": 0.92
+    },
+    {
+      "source_asset_ref": "snow_clean",
+      "source_column": "paid_loss_amount",
+      "target_asset_ref": "snow_summary",
+      "target_column": "total_incurred",
+      "process_ref": "snow_summary_step",
+      "lineage_level": "COLUMN",
+      "transformation_type": "DERIVED",
+      "transformation_expression": "sum(paid_loss_amount + paid_expense_amount)",
+      "confidence_score": 0.86
+    },
+    {
+      "source_asset_ref": "snow_raw_claims",
+      "source_column": "accident_date",
+      "target_asset_ref": "snow_summary",
+      "target_column": "accident_month",
+      "process_ref": "snow_summary_step",
+      "lineage_level": "COLUMN",
+      "transformation_type": "DERIVED",
+      "transformation_expression": "put(accident_date,yymmn6.)",
+      "confidence_score": 0.84
+    }
+  ],
+  "migration_mappings": [],
+  "validation_hints": [],
+  "unresolved_items": [],
+  "assumptions": []
+}
