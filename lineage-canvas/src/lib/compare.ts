@@ -53,6 +53,32 @@ function norm(v: unknown): string {
 // All comparable field labels, in display order — used to drive the field filter.
 export const COMPARABLE_FIELDS: string[] = FIELD_DEFS.map(f => f.label);
 
+// Table-level metadata fields surfaced in the table comparison, in display order.
+const TABLE_FIELD_DEFS: { label: string; get: (t: TableNode) => unknown }[] = [
+  { label: 'Description', get: t => t.metadata?.description },
+  { label: 'Environment', get: t => t.metadata?.environment },
+  { label: 'Business Domain', get: t => t.metadata?.businessDomain },
+  { label: 'Row Count', get: t => t.metadata?.rowCount },
+  { label: 'Column Count', get: t => t.metadata?.columnCount },
+  { label: 'Has Primary Key', get: t => t.metadata?.hasPrimaryKey },
+  { label: 'Unique Key Columns', get: t => t.metadata?.uniqueKeyColumns },
+  { label: 'Grain', get: t => t.metadata?.grainDescription },
+  { label: 'Refresh Frequency', get: t => t.metadata?.refreshFrequency },
+];
+
+/**
+ * Compare the table-level metadata of two tables, field by field. Returns one
+ * FieldDiff per metadata field (in display order); either side may be null.
+ */
+export function compareTableMetadata(a: TableNode | null, b: TableNode | null): FieldDiff[] {
+  if (!a || !b) return [];
+  return TABLE_FIELD_DEFS.map(({ label, get }) => {
+    const av = norm(get(a));
+    const bv = norm(get(b));
+    return { field: label, a: av, b: bv, changed: av !== bv };
+  });
+}
+
 function fieldDiffs(a: ColumnDef, b: ColumnDef, included?: Set<string>): FieldDiff[] {
   return FIELD_DEFS
     .filter(({ label }) => !included || included.has(label))

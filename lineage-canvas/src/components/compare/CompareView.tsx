@@ -5,7 +5,7 @@ import { Repository } from '../../db/repository';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { compareTables, compareColumnPair, COMPARABLE_FIELDS } from '../../lib/compare';
+import { compareTables, compareColumnPair, compareTableMetadata, COMPARABLE_FIELDS } from '../../lib/compare';
 import type { TableNode, ColumnDef, System, Canvas, Project, ComparisonMode, ComparisonEndpoint, ColumnPair, SavedComparison } from '../../types/models';
 import { ArrowLeft, GitCompare, Plus, Save, Trash2, ChevronDown, ChevronRight, SlidersHorizontal } from 'lucide-react';
 
@@ -360,6 +360,8 @@ export function CompareView() {
     ? tableById(projRight.tableId)
     : (rightFiltered.find(t => t.datasetId === rightTableId) ?? null);
   const diff = useMemo(() => compareTables(leftTable, rightTable, includedFields), [leftTable, rightTable, includedFields]);
+  const metaDiff = useMemo(() => compareTableMetadata(leftTable, rightTable), [leftTable, rightTable]);
+  const metaChangedCount = metaDiff.filter(f => f.changed).length;
 
   const findColumn = (ep: ComparisonEndpoint): ColumnDef | null => {
     if (!ep.datasetId || !ep.column) return null;
@@ -466,7 +468,44 @@ export function CompareView() {
             <span className="text-slate-400 mx-1">→</span>
             {renderQualified(rightTable.datasetId)}
           </div>
+
+          {/* Table-level metadata diff */}
+          <div className="border rounded-md overflow-hidden bg-white mb-4">
+            <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b">
+              <span className="text-xs font-semibold text-slate-700">Table metadata</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${metaChangedCount ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'}`}>
+                {metaChangedCount ? `${metaChangedCount} differ` : 'identical'}
+              </span>
+            </div>
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 border-b">
+                <tr>
+                  <th className="text-left px-3 py-2 font-semibold w-[180px]">Field</th>
+                  <th className="text-left px-3 py-2 font-semibold">A</th>
+                  <th className="w-6"></th>
+                  <th className="text-left px-3 py-2 font-semibold">B</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metaDiff.map(f => (
+                  <tr key={f.field} className={`border-b last:border-0 ${f.changed ? 'bg-amber-50/40' : ''}`}>
+                    <td className="px-3 py-1.5 text-slate-500">{f.field}</td>
+                    <td className={`px-3 py-1.5 font-mono ${f.changed ? 'text-red-700' : 'text-slate-700'}`}>{f.a || '∅'}</td>
+                    <td className="text-slate-300 text-center">{f.changed ? '→' : ''}</td>
+                    <td className={`px-3 py-1.5 font-mono ${f.changed ? 'text-green-700' : 'text-slate-700'}`}>{f.b || '∅'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
           <div className="border rounded-md overflow-hidden bg-white">
+            <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b">
+              <span className="text-xs font-semibold text-slate-700">Columns</span>
+              <span className="text-[10px] text-slate-500">
+                {diff.summary.added + diff.summary.removed + diff.summary.changed} of {diff.columns.length} differ
+              </span>
+            </div>
             <table className="w-full text-xs">
               <thead className="bg-slate-50 border-b">
                 <tr>
