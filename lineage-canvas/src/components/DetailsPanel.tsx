@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import type { TableMetadata } from '../types/models';
 import { ColumnManager } from './ColumnManager';
 
@@ -23,6 +23,8 @@ export function DetailsPanel() {
     : '';
 
   const [meta, setMeta] = useState<TableMetadata | null>(null);
+  // Shows the "Save successful" confirmation; cleared whenever a field changes.
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (node) {
@@ -30,10 +32,17 @@ export function DetailsPanel() {
     }
   }, [node]);
 
+  // Clear the confirmation as soon as the user edits a field. Compared by value
+  // (not reference) so the post-save store refresh — which re-applies identical
+  // values — doesn't dismiss it.
+  const metaKey = JSON.stringify(meta);
+  useEffect(() => { setSaved(false); }, [metaKey]);
+
   if (!node || !meta) return null;
 
-  const handleSave = () => {
-    updateTableMetadata(node.datasetId, meta);
+  const handleSave = async () => {
+    await updateTableMetadata(node.datasetId, meta);
+    setSaved(true);
   };
 
   const handleClose = () => {
@@ -191,6 +200,11 @@ export function DetailsPanel() {
           </table>
 
           <div className="p-2 border-t-2 border-[#999999]">
+            {saved && (
+              <div className="flex items-center justify-center gap-1 mb-2 text-[11px] font-mono text-green-700">
+                <Check size={12} /> Save successful
+              </div>
+            )}
             <Button onClick={handleSave} className="w-full h-7 bg-gradient-to-b from-[#5b9dd9] to-[#306b9c] hover:from-[#6aadea] hover:to-[#407cb0] text-white font-mono text-xs rounded-none border border-[#234567]">
               Save Metadata
             </Button>

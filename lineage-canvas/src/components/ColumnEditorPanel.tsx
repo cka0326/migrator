@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import type { ColumnDef } from '../types/models';
 
 export function ColumnEditorPanel() {
@@ -34,6 +34,9 @@ export function ColumnEditorPanel() {
   const [stddevValue, setStddevValue] = useState<string>('');
   const [sumValue, setSumValue] = useState<string>('');
 
+  // Shows the "Save successful" confirmation; cleared whenever a field changes.
+  const [saved, setSaved] = useState(false);
+
   useEffect(() => {
     if (column) {
       setDataType(column.dataType || '');
@@ -54,6 +57,14 @@ export function ColumnEditorPanel() {
       setSumValue(column.stats?.sumValue !== undefined ? String(column.stats.sumValue) : '');
     }
   }, [column]);
+
+  // Clear the confirmation as soon as the user changes any field. The post-save
+  // store refresh re-applies identical values, so this key is unchanged then.
+  const formKey = [
+    dataType, nullable, maxLength, precision, defaultValue, columnDefinition, columnComputationFormula,
+    nullCount, minValue, maxValue, uniqueCount, uniques, meanValue, stddevValue, sumValue,
+  ].join('');
+  useEffect(() => { setSaved(false); }, [formKey]);
 
   const handleSave = async () => {
     if (!selectedColumn || !column) return;
@@ -83,6 +94,7 @@ export function ColumnEditorPanel() {
     };
 
     await updateColumn(selectedColumn.datasetId, column.name, updates);
+    setSaved(true);
   };
 
   const handleClose = () => {
@@ -106,9 +118,16 @@ export function ColumnEditorPanel() {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-mono text-[#666666]">Column Metadata</span>
-          <Button onClick={handleSave} className="ml-auto h-6 px-3 bg-gradient-to-b from-[#5b9dd9] to-[#306b9c] hover:from-[#6aadea] hover:to-[#407cb0] text-white font-mono text-[10px] rounded-none border border-[#234567]">
-            Save
-          </Button>
+          <div className="ml-auto flex items-center gap-2">
+            {saved && (
+              <span className="flex items-center gap-1 text-[10px] font-mono text-green-700">
+                <Check size={11} /> Save successful
+              </span>
+            )}
+            <Button onClick={handleSave} className="h-6 px-3 bg-gradient-to-b from-[#5b9dd9] to-[#306b9c] hover:from-[#6aadea] hover:to-[#407cb0] text-white font-mono text-[10px] rounded-none border border-[#234567]">
+              Save
+            </Button>
+          </div>
         </div>
       </div>
 
