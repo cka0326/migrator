@@ -85,88 +85,106 @@ export function DetailsPanel() {
             <tbody>
               <tr className="bg-gradient-to-b from-[#e0e0e0] to-[#d5d5d5]">
                 <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-[#999999]">
-                  Table Properties
+                  Identity
                 </td>
               </tr>
               <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] w-[110px] border-r border-[#dddddd]">Object Type</td>
-                <td className="px-2 py-1">
-                  <Select value={meta.objectType} onValueChange={(val: any) => setMeta({...meta, objectType: val})}>
-                    <SelectTrigger className="h-6 text-xs border-[#999999] font-mono rounded-none">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="TABLE">TABLE</SelectItem>
-                      <SelectItem value="VIEW">VIEW</SelectItem>
-                      <SelectItem value="EXTERNAL">EXTERNAL</SelectItem>
-                      <SelectItem value="DATASET">DATASET</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </td>
+                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] w-[130px] border-r border-[#dddddd]">Namespace</td>
+                <td className="px-2 py-1 font-mono text-[11px] text-[#333333]">{node.namespace}</td>
               </tr>
               <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Role</td>
-                <td className="px-2 py-1">
-                  <Select value={meta.role || "UNASSIGNED"} onValueChange={(val: any) => setMeta({...meta, role: val === "UNASSIGNED" ? undefined : val})}>
-                    <SelectTrigger className="h-6 text-xs border-[#999999] font-mono rounded-none">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="UNASSIGNED">UNASSIGNED</SelectItem>
-                      <SelectItem value="SOURCE">SOURCE</SelectItem>
-                      <SelectItem value="INTERMEDIATE">INTERMEDIATE</SelectItem>
-                      <SelectItem value="TARGET">TARGET</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </td>
+                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Table Name</td>
+                <td className="px-2 py-1 font-mono text-[11px] text-[#333333]">{node.name}</td>
               </tr>
 
               <tr className="bg-gradient-to-b from-[#e0e0e0] to-[#d5d5d5]">
                 <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-[#999999] border-t-2 border-t-[#999999]">
-                  Business Information
-                </td>
-              </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Business Name</td>
-                <td className="px-2 py-1">
-                  <Input value={meta.businessName || ''} onChange={e => setMeta({...meta, businessName: e.target.value})} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
-                </td>
-              </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Owner</td>
-                <td className="px-2 py-1">
-                  <Input value={meta.owner || ''} onChange={e => setMeta({...meta, owner: e.target.value})} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
-                </td>
-              </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Domain</td>
-                <td className="px-2 py-1">
-                  <Input value={meta.domain || ''} onChange={e => setMeta({...meta, domain: e.target.value})} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
-                </td>
-              </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Classification</td>
-                <td className="px-2 py-1">
-                  <Select value={meta.classification || "UNASSIGNED"} onValueChange={(val: any) => setMeta({...meta, classification: val === "UNASSIGNED" ? undefined : val})}>
-                    <SelectTrigger className="h-6 text-xs border-[#999999] font-mono rounded-none">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="UNASSIGNED">UNASSIGNED</SelectItem>
-                      <SelectItem value="PUBLIC">PUBLIC</SelectItem>
-                      <SelectItem value="INTERNAL">INTERNAL</SelectItem>
-                      <SelectItem value="CONFIDENTIAL">CONFIDENTIAL</SelectItem>
-                      <SelectItem value="RESTRICTED">RESTRICTED</SelectItem>
-                      <SelectItem value="PII">PII</SelectItem>
-                      <SelectItem value="PHI">PHI</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  Table Metadata
                 </td>
               </tr>
               <tr className="border-b border-[#dddddd]">
                 <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Description</td>
                 <td className="px-2 py-1">
                   <Input value={meta.description || ''} onChange={e => setMeta({...meta, description: e.target.value})} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+                </td>
+              </tr>
+              <tr className="border-b border-[#dddddd]">
+                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Environment</td>
+                <td className="px-2 py-1">
+                  <Select value={meta.environment || "UNASSIGNED"} onValueChange={(val: any) => setMeta({...meta, environment: val === "UNASSIGNED" ? undefined : val})}>
+                    <SelectTrigger className="h-6 text-xs border-[#999999] font-mono rounded-none">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="UNASSIGNED">UNASSIGNED</SelectItem>
+                      <SelectItem value="DEV">DEV</SelectItem>
+                      <SelectItem value="TEST">TEST</SelectItem>
+                      <SelectItem value="UAT">UAT</SelectItem>
+                      <SelectItem value="PROD">PROD</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </td>
+              </tr>
+              <tr className="border-b border-[#dddddd]">
+                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Business Domain</td>
+                <td className="px-2 py-1">
+                  <Input value={meta.businessDomain || ''} onChange={e => setMeta({...meta, businessDomain: e.target.value})} className="h-6 text-xs border-[#999999] font-mono rounded-none" placeholder="Claims, Policy, Billing, Finance" />
+                </td>
+              </tr>
+              <tr className="border-b border-[#dddddd]">
+                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Row Count</td>
+                <td className="px-2 py-1">
+                  <Input type="number" value={meta.rowCount ?? ''} onChange={e => setMeta({...meta, rowCount: e.target.value === '' ? undefined : Number(e.target.value)})} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+                </td>
+              </tr>
+              <tr className="border-b border-[#dddddd]">
+                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Column Count</td>
+                <td className="px-2 py-1">
+                  <Input type="number" value={meta.columnCount ?? ''} onChange={e => setMeta({...meta, columnCount: e.target.value === '' ? undefined : Number(e.target.value)})} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+                </td>
+              </tr>
+              <tr className="border-b border-[#dddddd]">
+                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Has Primary Key</td>
+                <td className="px-2 py-1">
+                  <Select value={meta.hasPrimaryKey === undefined ? "UNASSIGNED" : String(meta.hasPrimaryKey)} onValueChange={(val: any) => setMeta({...meta, hasPrimaryKey: val === "UNASSIGNED" ? undefined : val === "true"})}>
+                    <SelectTrigger className="h-6 text-xs border-[#999999] font-mono rounded-none">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="UNASSIGNED">UNASSIGNED</SelectItem>
+                      <SelectItem value="true">TRUE</SelectItem>
+                      <SelectItem value="false">FALSE</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </td>
+              </tr>
+              <tr className="border-b border-[#dddddd]">
+                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Unique Key Columns</td>
+                <td className="px-2 py-1">
+                  <Input value={meta.uniqueKeyColumns || ''} onChange={e => setMeta({...meta, uniqueKeyColumns: e.target.value})} className="h-6 text-xs border-[#999999] font-mono rounded-none" placeholder="comma-separated column names" />
+                </td>
+              </tr>
+              <tr className="border-b border-[#dddddd]">
+                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Grain</td>
+                <td className="px-2 py-1">
+                  <Input value={meta.grainDescription || ''} onChange={e => setMeta({...meta, grainDescription: e.target.value})} className="h-6 text-xs border-[#999999] font-mono rounded-none" placeholder="one row per ..." />
+                </td>
+              </tr>
+              <tr className="border-b border-[#dddddd]">
+                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Refresh Frequency</td>
+                <td className="px-2 py-1">
+                  <Select value={meta.refreshFrequency || "UNASSIGNED"} onValueChange={(val: any) => setMeta({...meta, refreshFrequency: val === "UNASSIGNED" ? undefined : val})}>
+                    <SelectTrigger className="h-6 text-xs border-[#999999] font-mono rounded-none">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="UNASSIGNED">UNASSIGNED</SelectItem>
+                      <SelectItem value="DAILY">DAILY</SelectItem>
+                      <SelectItem value="WEEKLY">WEEKLY</SelectItem>
+                      <SelectItem value="MONTHLY">MONTHLY</SelectItem>
+                      <SelectItem value="AD_HOC">AD-HOC</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </td>
               </tr>
             </tbody>

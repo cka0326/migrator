@@ -28,21 +28,20 @@ export interface TableDiff {
 // differently. See ./dataTypes.
 const FIELD_DEFS: { label: string; get: (c: ColumnDef) => unknown; eq?: (a: unknown, b: unknown) => boolean }[] = [
   { label: 'Data Type', get: c => c.dataType, eq: (a, b) => dataTypesEquivalent(a as string, b as string) },
-  { label: 'Business Name', get: c => c.metadata?.businessName },
-  { label: 'Classification', get: c => c.metadata?.classification },
-  { label: 'Platform', get: c => c.metadata?.platform },
-  { label: 'PII', get: c => c.metadata?.pii },
   { label: 'Nullable', get: c => c.metadata?.nullable },
-  { label: 'Primary Key', get: c => c.metadata?.isPrimaryKey },
-  { label: 'Foreign Key', get: c => c.metadata?.isForeignKey },
-  { label: 'FK Ref', get: c => c.metadata?.foreignKeyRef },
-  { label: 'Default', get: c => c.metadata?.defaultValue },
-  { label: 'Length', get: c => c.metadata?.length },
+  { label: 'Max Length', get: c => c.metadata?.maxLength },
   { label: 'Precision', get: c => c.metadata?.precision },
-  { label: 'Scale', get: c => c.metadata?.scale },
-  { label: 'Format', get: c => c.metadata?.format },
-  { label: 'Unit', get: c => c.metadata?.unit },
-  { label: 'Description', get: c => c.metadata?.description },
+  { label: 'Default Value', get: c => c.metadata?.defaultValue },
+  { label: 'Column Definition', get: c => c.metadata?.columnDefinition },
+  { label: 'Computation Formula', get: c => c.metadata?.columnComputationFormula },
+  { label: 'Null Count', get: c => c.stats?.nullCount },
+  { label: 'Min Value', get: c => c.stats?.minValue },
+  { label: 'Max Value', get: c => c.stats?.maxValue },
+  { label: 'Unique Count', get: c => c.stats?.uniqueCount },
+  { label: 'Uniques', get: c => c.stats?.uniques },
+  { label: 'Mean', get: c => c.stats?.meanValue },
+  { label: 'Std Dev', get: c => c.stats?.stddevValue },
+  { label: 'Sum', get: c => c.stats?.sumValue },
 ];
 
 function norm(v: unknown): string {

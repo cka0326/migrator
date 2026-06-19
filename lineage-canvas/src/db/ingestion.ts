@@ -83,9 +83,7 @@ export async function ingestLineageJSON(fileContent: string, fileName: string, c
             origin: 'STUB',
             completeness: 'STUB',
             metadata: {
-              objectType: (ds.object_type as any) || 'TABLE',
-              role: ds.role as any,
-              isTemporary: ds.is_temporary
+              columnCount: finalColumns.length,
             },
             columns: finalColumns,
             createdByUploadId: uploadId,

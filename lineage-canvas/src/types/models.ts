@@ -43,66 +43,50 @@ export interface SavedComparison {
   updatedAt: string;
 }
 
-// ---------- comprehensive TABLE-level metadata (all optional, filled incrementally) ----------
+// ---------- TABLE-level metadata (see meta_data_capture.md; all optional, filled incrementally) ----------
+// table_name and name_space live on TableNode itself (name / namespace).
+export type Environment = "DEV" | "TEST" | "UAT" | "PROD";
+export type RefreshFrequency = "DAILY" | "WEEKLY" | "MONTHLY" | "AD_HOC";
+
 export interface TableMetadata {
-  objectType: "TABLE" | "VIEW" | "EXTERNAL" | "DATASET"; // editable
-  role?: "SOURCE" | "INTERMEDIATE" | "TARGET";
-  isTemporary?: boolean;
-  businessName?: string;          // friendly/display name
-  description?: string;           // long text
-  owner?: string;
-  steward?: string;               // data steward
-  domain?: string;                // business domain (e.g., Claims, Policy, Billing)
-  classification?: "PUBLIC" | "INTERNAL" | "CONFIDENTIAL" | "RESTRICTED" | "PII" | "PHI";
-  sourceSystem?: string;          // system of record (e.g., "Guidewire", "Legacy SAS") — distinct from the lane
-  recordCount?: number;           // table row count
-  grain?: string;                 // granularity, e.g. "one row per policy per term"
-  refreshFrequency?: "REAL_TIME" | "HOURLY" | "DAILY" | "WEEKLY" | "MONTHLY" | "ON_DEMAND" | "STATIC";
-  physicalLocation?: string;      // path / database location
-  tags?: string[];
-  notes?: string;                 // free text
-  lastProfiledAt?: string;        // when stats were last computed/entered
+  description?: string;            // description of the table
+  environment?: Environment;       // DEV | TEST | UAT | PROD
+  businessDomain?: string;         // e.g. Claims, Policy, Billing, Finance
+  rowCount?: number;               // count of rows in the table
+  columnCount?: number;            // count of columns in the table
+  hasPrimaryKey?: boolean;         // whether the table has a primary key
+  uniqueKeyColumns?: string;       // comma-separated list of column names
+  grainDescription?: string;       // description of the grain of the table
+  refreshFrequency?: RefreshFrequency; // DAILY | WEEKLY | MONTHLY | AD_HOC
 }
 
-// ---------- column statistics ----------
+// ---------- column profiling statistics (see meta_data_capture.md) ----------
 export interface ColumnStat {
-  recordCount?: number;
-  nullCount?: number;
-  distinctCount?: number;
-  min?: string | number;
-  max?: string | number;
-  mean?: number;
-  stdDev?: number;
-  sampleValues?: string[];
+  nullCount?: number;             // count of null values
+  minValue?: string;              // minimum value
+  maxValue?: string;              // maximum value
+  uniqueCount?: number;           // count of unique values
+  uniques?: string;               // comma-separated list of unique values
+  meanValue?: number;             // mean value
+  stddevValue?: number;           // standard deviation
+  sumValue?: number;              // sum of values
 }
 
-// ---------- comprehensive COLUMN-level metadata ----------
+// ---------- COLUMN-level metadata (see meta_data_capture.md) ----------
+// column_name / data_type live on ColumnDef; table_name / name_space on the parent TableNode.
 export interface ColumnMetadata {
-  businessName?: string;
-  description?: string;
-  classification?: "PUBLIC" | "INTERNAL" | "CONFIDENTIAL" | "RESTRICTED" | "PII" | "PHI";
-  platform?: string;              // target platform / system (e.g., "Redshift", "Snowflake", "BigQuery")
-  pii?: boolean;                  // separate PII flag indicator
-  nullable?: boolean;
-  isPrimaryKey?: boolean;
-  isForeignKey?: boolean;
-  foreignKeyRef?: string;         // "SYSTEM:QUALIFIED_NAME.COLUMN" it references
-  defaultValue?: string;
-  length?: number;                // for character types
-  precision?: number;             // for numeric types
-  scale?: number;
-  allowedValues?: string;         // enumerated domain / description
-  format?: string;                // e.g., "YYYY-MM-DD", "$#,##0.00"
-  unit?: string;                  // e.g., "USD", "days"
-  tags?: string[];
-  notes?: string;
+  nullable?: boolean;             // whether the column allows NULLs
+  maxLength?: number;             // maximum length of the column
+  precision?: number;             // numeric precision
+  defaultValue?: string;          // default value
+  columnDefinition?: string;      // definition of the column
+  columnComputationFormula?: string; // formula for computing the column
 }
 
 export interface ColumnDef {
-  name: string;                   // UPPERCASE canonical (unless quoted) — IMMUTABLE identity within the node
+  name: string;                   // UPPERCASE canonical — IMMUTABLE identity within the node
   dataType: string;               // logical/physical type; "UNKNOWN" until enriched
   ordinal: number;                // editable (reorder)
-  quoted?: boolean;
   origin: "LINEAGE" | "EXCEL" | "MANUAL";
   metadata: ColumnMetadata;
   stats: ColumnStat;

@@ -101,8 +101,7 @@ export function ColumnManager({ datasetId }: { datasetId: string }) {
               <div className="flex items-center gap-2">
                 <span className="font-mono font-semibold text-slate-800">{col.name}</span>
                 <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0">{col.dataType}</Badge>
-                {col.metadata?.isPrimaryKey && <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[8px] px-1 py-0 hover:bg-amber-100">PK</Badge>}
-                {col.metadata?.isForeignKey && <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 text-[8px] px-1 py-0 hover:bg-indigo-100">FK</Badge>}
+                {col.metadata?.nullable === false && <Badge className="bg-slate-200 text-slate-700 border-slate-300 text-[8px] px-1 py-0 hover:bg-slate-200">NOT NULL</Badge>}
               </div>
               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" disabled={isSearchActive || actualIndex === 0} onClick={(e) => {

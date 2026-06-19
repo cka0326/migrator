@@ -15,108 +15,71 @@ export function ColumnEditorPanel() {
   const node = selectedColumn ? nodes[selectedColumn.datasetId] : null;
   const column = node?.columns.find(c => c.name === selectedColumn?.columnName);
 
-  // Form fields
+  // Metadata fields
   const [dataType, setDataType] = useState('');
-  const [businessName, setBusinessName] = useState('');
-  const [description, setDescription] = useState('');
-  const [classification, setClassification] = useState<string>('UNASSIGNED');
-  const [platform, setPlatform] = useState('');
-  const [pii, setPii] = useState<boolean>(false);
-  const [nullable, setNullable] = useState<boolean>(true);
-  const [isPrimaryKey, setIsPrimaryKey] = useState<boolean>(false);
-  const [isForeignKey, setIsForeignKey] = useState<boolean>(false);
-  const [foreignKeyRef, setForeignKeyRef] = useState('');
-  const [defaultValue, setDefaultValue] = useState('');
-  const [length, setLength] = useState<string>('');
+  const [nullable, setNullable] = useState<string>('UNASSIGNED');
+  const [maxLength, setMaxLength] = useState<string>('');
   const [precision, setPrecision] = useState<string>('');
-  const [scale, setScale] = useState<string>('');
-  const [allowedValues, setAllowedValues] = useState('');
-  const [format, setFormat] = useState('');
-  const [unit, setUnit] = useState('');
-  const [tags, setTags] = useState('');
-  const [notes, setNotes] = useState('');
+  const [defaultValue, setDefaultValue] = useState('');
+  const [columnDefinition, setColumnDefinition] = useState('');
+  const [columnComputationFormula, setColumnComputationFormula] = useState('');
 
-  // Stats
-  const [recordCount, setRecordCount] = useState<string>('');
+  // Profiling stats
   const [nullCount, setNullCount] = useState<string>('');
-  const [distinctCount, setDistinctCount] = useState<string>('');
-  const [minVal, setMinVal] = useState<string>('');
-  const [maxVal, setMaxVal] = useState<string>('');
-  const [meanVal, setMeanVal] = useState<string>('');
-  const [stdDevVal, setStdDevVal] = useState<string>('');
-  const [sampleValues, setSampleValues] = useState('');
+  const [minValue, setMinValue] = useState<string>('');
+  const [maxValue, setMaxValue] = useState<string>('');
+  const [uniqueCount, setUniqueCount] = useState<string>('');
+  const [uniques, setUniques] = useState('');
+  const [meanValue, setMeanValue] = useState<string>('');
+  const [stddevValue, setStddevValue] = useState<string>('');
+  const [sumValue, setSumValue] = useState<string>('');
 
   useEffect(() => {
     if (column) {
       setDataType(column.dataType || '');
-      setBusinessName(column.metadata?.businessName || '');
-      setDescription(column.metadata?.description || '');
-      setClassification(column.metadata?.classification || 'UNASSIGNED');
-      setPlatform(column.metadata?.platform || '');
-      setPii(!!column.metadata?.pii);
-      setNullable(column.metadata?.nullable ?? true);
-      setIsPrimaryKey(!!column.metadata?.isPrimaryKey);
-      setIsForeignKey(!!column.metadata?.isForeignKey);
-      setForeignKeyRef(column.metadata?.foreignKeyRef || '');
-      setDefaultValue(column.metadata?.defaultValue || '');
-      setLength(column.metadata?.length !== undefined ? String(column.metadata.length) : '');
+      setNullable(column.metadata?.nullable === undefined ? 'UNASSIGNED' : String(column.metadata.nullable));
+      setMaxLength(column.metadata?.maxLength !== undefined ? String(column.metadata.maxLength) : '');
       setPrecision(column.metadata?.precision !== undefined ? String(column.metadata.precision) : '');
-      setScale(column.metadata?.scale !== undefined ? String(column.metadata.scale) : '');
-      setAllowedValues(column.metadata?.allowedValues || '');
-      setFormat(column.metadata?.format || '');
-      setUnit(column.metadata?.unit || '');
-      setTags(column.metadata?.tags?.join(', ') || '');
-      setNotes(column.metadata?.notes || '');
+      setDefaultValue(column.metadata?.defaultValue || '');
+      setColumnDefinition(column.metadata?.columnDefinition || '');
+      setColumnComputationFormula(column.metadata?.columnComputationFormula || '');
 
-      setRecordCount(column.stats?.recordCount !== undefined ? String(column.stats.recordCount) : '');
       setNullCount(column.stats?.nullCount !== undefined ? String(column.stats.nullCount) : '');
-      setDistinctCount(column.stats?.distinctCount !== undefined ? String(column.stats.distinctCount) : '');
-      setMinVal(column.stats?.min !== undefined ? String(column.stats.min) : '');
-      setMaxVal(column.stats?.max !== undefined ? String(column.stats.max) : '');
-      setMeanVal(column.stats?.mean !== undefined ? String(column.stats.mean) : '');
-      setStdDevVal(column.stats?.stdDev !== undefined ? String(column.stats.stdDev) : '');
-      setSampleValues(column.stats?.sampleValues?.join(', ') || '');
+      setMinValue(column.stats?.minValue ?? '');
+      setMaxValue(column.stats?.maxValue ?? '');
+      setUniqueCount(column.stats?.uniqueCount !== undefined ? String(column.stats.uniqueCount) : '');
+      setUniques(column.stats?.uniques || '');
+      setMeanValue(column.stats?.meanValue !== undefined ? String(column.stats.meanValue) : '');
+      setStddevValue(column.stats?.stddevValue !== undefined ? String(column.stats.stddevValue) : '');
+      setSumValue(column.stats?.sumValue !== undefined ? String(column.stats.sumValue) : '');
     }
   }, [column]);
 
   const handleSave = async () => {
     if (!selectedColumn || !column) return;
 
-    const parsedTags = tags.split(',').map(t => t.trim()).filter(Boolean);
-    const parsedSampleValues = sampleValues.split(',').map(s => s.trim()).filter(Boolean);
+    const num = (s: string) => (s.trim() === '' ? undefined : Number(s));
 
     const updates: Partial<ColumnDef> = {
       dataType,
       metadata: {
-        businessName: businessName || undefined,
-        description: description || undefined,
-        classification: classification === 'UNASSIGNED' ? undefined : (classification as any),
-        platform: platform || undefined,
-        pii: pii || undefined,
-        nullable,
-        isPrimaryKey,
-        isForeignKey,
-        foreignKeyRef: isForeignKey ? (foreignKeyRef || undefined) : undefined,
+        nullable: nullable === 'UNASSIGNED' ? undefined : nullable === 'true',
+        maxLength: num(maxLength),
+        precision: num(precision),
         defaultValue: defaultValue || undefined,
-        length: length ? parseInt(length) : undefined,
-        precision: precision ? parseInt(precision) : undefined,
-        scale: scale ? parseInt(scale) : undefined,
-        allowedValues: allowedValues || undefined,
-        format: format || undefined,
-        unit: unit || undefined,
-        tags: parsedTags.length ? parsedTags : undefined,
-        notes: notes || undefined,
+        columnDefinition: columnDefinition || undefined,
+        columnComputationFormula: columnComputationFormula || undefined,
       },
       stats: {
-        recordCount: recordCount ? parseInt(recordCount) : undefined,
-        nullCount: nullCount ? parseInt(nullCount) : undefined,
-        distinctCount: distinctCount ? parseInt(distinctCount) : undefined,
-        min: minVal || undefined,
-        max: maxVal || undefined,
-        mean: meanVal ? parseFloat(meanVal) : undefined,
-        stdDev: stdDevVal ? parseFloat(stdDevVal) : undefined,
-        sampleValues: parsedSampleValues.length ? parsedSampleValues : undefined,
-      }
+        nullCount: num(nullCount),
+        minValue: minValue || undefined,
+        maxValue: maxValue || undefined,
+        uniqueCount: num(uniqueCount),
+        uniques: uniques || undefined,
+        meanValue: num(meanValue),
+        stddevValue: num(stddevValue),
+        sumValue: num(sumValue),
+      },
     };
 
     await updateColumn(selectedColumn.datasetId, column.name, updates);
@@ -152,123 +115,52 @@ export function ColumnEditorPanel() {
       {/* Content */}
       <table className="w-full border-collapse text-xs">
         <tbody>
-          {/* General */}
+          {/* Identity */}
           <tr className="bg-gradient-to-b from-[#e0e0e0] to-[#d5d5d5]">
             <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-[#999999]">
+              Identity
+            </td>
+          </tr>
+          <tr className="border-b border-[#dddddd]">
+            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] w-[130px] border-r border-[#dddddd]">Namespace</td>
+            <td className="px-2 py-1 font-mono text-[11px] text-[#333333]">{node?.namespace}</td>
+          </tr>
+          <tr className="border-b border-[#dddddd]">
+            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Table Name</td>
+            <td className="px-2 py-1 font-mono text-[11px] text-[#333333]">{node?.name}</td>
+          </tr>
+
+          {/* General */}
+          <tr className="bg-gradient-to-b from-[#e0e0e0] to-[#d5d5d5]">
+            <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-[#999999] border-t-2 border-t-[#999999]">
               General
             </td>
           </tr>
           <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] w-[120px] border-r border-[#dddddd]">Data Type</td>
+            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Data Type</td>
             <td className="px-2 py-1">
               <Input value={dataType} onChange={e => setDataType(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
             </td>
           </tr>
           <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Platform</td>
+            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Nullable</td>
             <td className="px-2 py-1">
-              <Input value={platform} onChange={e => setPlatform(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
-            </td>
-          </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Business Name</td>
-            <td className="px-2 py-1">
-              <Input value={businessName} onChange={e => setBusinessName(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
-            </td>
-          </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Classification</td>
-            <td className="px-2 py-1">
-              <Select value={classification} onValueChange={setClassification}>
+              <Select value={nullable} onValueChange={setNullable}>
                 <SelectTrigger className="h-6 text-xs border-[#999999] font-mono rounded-none">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="UNASSIGNED">UNASSIGNED</SelectItem>
-                  <SelectItem value="PUBLIC">PUBLIC</SelectItem>
-                  <SelectItem value="INTERNAL">INTERNAL</SelectItem>
-                  <SelectItem value="CONFIDENTIAL">CONFIDENTIAL</SelectItem>
-                  <SelectItem value="RESTRICTED">RESTRICTED</SelectItem>
-                  <SelectItem value="PII">PII</SelectItem>
-                  <SelectItem value="PHI">PHI</SelectItem>
+                  <SelectItem value="true">TRUE</SelectItem>
+                  <SelectItem value="false">FALSE</SelectItem>
                 </SelectContent>
               </Select>
             </td>
           </tr>
           <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Contains PII</td>
+            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Max Length</td>
             <td className="px-2 py-1">
-              <label className="flex items-center gap-1">
-                <input type="checkbox" checked={pii} onChange={e => setPii(e.target.checked)} className="w-3 h-3" />
-                <span className="text-[11px] font-mono text-[#333333]">Yes</span>
-              </label>
-            </td>
-          </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Description</td>
-            <td className="px-2 py-1">
-              <Input value={description} onChange={e => setDescription(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
-            </td>
-          </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Tags</td>
-            <td className="px-2 py-1">
-              <Input value={tags} onChange={e => setTags(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" placeholder="comma-separated" />
-            </td>
-          </tr>
-
-          {/* Constraints */}
-          <tr className="bg-gradient-to-b from-[#e0e0e0] to-[#d5d5d5]">
-            <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-[#999999] border-t-2 border-t-[#999999]">
-              Constraints
-            </td>
-          </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Nullable</td>
-            <td className="px-2 py-1">
-              <label className="flex items-center gap-1">
-                <input type="checkbox" checked={nullable} onChange={e => setNullable(e.target.checked)} className="w-3 h-3" />
-                <span className="text-[11px] font-mono text-[#333333]">Can contain NULL</span>
-              </label>
-            </td>
-          </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Primary Key</td>
-            <td className="px-2 py-1">
-              <label className="flex items-center gap-1">
-                <input type="checkbox" checked={isPrimaryKey} onChange={e => setIsPrimaryKey(e.target.checked)} className="w-3 h-3" />
-                <span className="text-[11px] font-mono text-[#333333]">Unique identifier</span>
-              </label>
-            </td>
-          </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Foreign Key</td>
-            <td className="px-2 py-1">
-              <label className="flex items-center gap-1">
-                <input type="checkbox" checked={isForeignKey} onChange={e => setIsForeignKey(e.target.checked)} className="w-3 h-3" />
-                <span className="text-[11px] font-mono text-[#333333]">References table</span>
-              </label>
-            </td>
-          </tr>
-          {isForeignKey && (
-            <tr className="border-b border-[#dddddd]">
-              <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">FK Reference</td>
-              <td className="px-2 py-1">
-                <Input value={foreignKeyRef} onChange={e => setForeignKeyRef(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" placeholder="SYSTEM:DB.SCHEMA.TABLE.COLUMN" />
-              </td>
-            </tr>
-          )}
-
-          {/* Type Modifiers */}
-          <tr className="bg-gradient-to-b from-[#e0e0e0] to-[#d5d5d5]">
-            <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-[#999999] border-t-2 border-t-[#999999]">
-              Type Modifiers
-            </td>
-          </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Length</td>
-            <td className="px-2 py-1">
-              <Input type="number" value={length} onChange={e => setLength(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input type="number" value={maxLength} onChange={e => setMaxLength(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
             </td>
           </tr>
           <tr className="border-b border-[#dddddd]">
@@ -278,33 +170,31 @@ export function ColumnEditorPanel() {
             </td>
           </tr>
           <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Scale</td>
-            <td className="px-2 py-1">
-              <Input type="number" value={scale} onChange={e => setScale(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
-            </td>
-          </tr>
-          <tr className="border-b border-[#dddddd]">
             <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Default Value</td>
             <td className="px-2 py-1">
               <Input value={defaultValue} onChange={e => setDefaultValue(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
             </td>
           </tr>
           <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Allowed Values</td>
+            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Definition</td>
             <td className="px-2 py-1">
-              <Input value={allowedValues} onChange={e => setAllowedValues(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <textarea
+                value={columnDefinition}
+                onChange={e => setColumnDefinition(e.target.value)}
+                className="w-full min-h-[44px] px-2 py-1 text-xs border border-[#999999] font-mono rounded-none resize-y"
+                placeholder="Definition of the column"
+              />
             </td>
           </tr>
           <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Format</td>
+            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Computation Formula</td>
             <td className="px-2 py-1">
-              <Input value={format} onChange={e => setFormat(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" placeholder="YYYY-MM-DD" />
-            </td>
-          </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Unit</td>
-            <td className="px-2 py-1">
-              <Input value={unit} onChange={e => setUnit(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" placeholder="USD, meters" />
+              <textarea
+                value={columnComputationFormula}
+                onChange={e => setColumnComputationFormula(e.target.value)}
+                className="w-full min-h-[44px] px-2 py-1 text-xs border border-[#999999] font-mono rounded-none resize-y"
+                placeholder="Formula for computing the column"
+              />
             </td>
           </tr>
 
@@ -315,69 +205,51 @@ export function ColumnEditorPanel() {
             </td>
           </tr>
           <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Record Count</td>
-            <td className="px-2 py-1">
-              <Input type="number" value={recordCount} onChange={e => setRecordCount(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
-            </td>
-          </tr>
-          <tr className="border-b border-[#dddddd]">
             <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Null Count</td>
             <td className="px-2 py-1">
               <Input type="number" value={nullCount} onChange={e => setNullCount(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
             </td>
           </tr>
           <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Distinct Count</td>
-            <td className="px-2 py-1">
-              <Input type="number" value={distinctCount} onChange={e => setDistinctCount(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
-            </td>
-          </tr>
-          <tr className="border-b border-[#dddddd]">
             <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Min Value</td>
             <td className="px-2 py-1">
-              <Input value={minVal} onChange={e => setMinVal(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input value={minValue} onChange={e => setMinValue(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
             </td>
           </tr>
           <tr className="border-b border-[#dddddd]">
             <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Max Value</td>
             <td className="px-2 py-1">
-              <Input value={maxVal} onChange={e => setMaxVal(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input value={maxValue} onChange={e => setMaxValue(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+            </td>
+          </tr>
+          <tr className="border-b border-[#dddddd]">
+            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Unique Count</td>
+            <td className="px-2 py-1">
+              <Input type="number" value={uniqueCount} onChange={e => setUniqueCount(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+            </td>
+          </tr>
+          <tr className="border-b border-[#dddddd]">
+            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Uniques</td>
+            <td className="px-2 py-1">
+              <Input value={uniques} onChange={e => setUniques(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" placeholder="comma-separated" />
             </td>
           </tr>
           <tr className="border-b border-[#dddddd]">
             <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Mean</td>
             <td className="px-2 py-1">
-              <Input type="number" step="any" value={meanVal} onChange={e => setMeanVal(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input type="number" step="any" value={meanValue} onChange={e => setMeanValue(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
             </td>
           </tr>
           <tr className="border-b border-[#dddddd]">
             <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Std Deviation</td>
             <td className="px-2 py-1">
-              <Input type="number" step="any" value={stdDevVal} onChange={e => setStdDevVal(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input type="number" step="any" value={stddevValue} onChange={e => setStddevValue(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
             </td>
           </tr>
           <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Sample Values</td>
+            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Sum</td>
             <td className="px-2 py-1">
-              <Input value={sampleValues} onChange={e => setSampleValues(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" placeholder="comma-separated" />
-            </td>
-          </tr>
-
-          {/* Notes */}
-          <tr className="bg-gradient-to-b from-[#e0e0e0] to-[#d5d5d5]">
-            <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-[#999999] border-t-2 border-t-[#999999]">
-              Notes
-            </td>
-          </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Comments</td>
-            <td className="px-2 py-1">
-              <textarea
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                className="w-full min-h-[60px] px-2 py-1 text-xs border border-[#999999] font-mono rounded-none resize-y"
-                placeholder="Document logic, business rules, etc."
-              />
+              <Input type="number" step="any" value={sumValue} onChange={e => setSumValue(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
             </td>
           </tr>
         </tbody>

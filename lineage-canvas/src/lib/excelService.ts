@@ -21,22 +21,25 @@ export async function generateExcelTemplate() {
     ["system", "LEGACY", "LEGACY or TARGET"],
     ["namespace", "", "Library or Schema"],
     ["table_name", "", ""],
-    ["object_type", "TABLE", "TABLE|VIEW|EXTERNAL|DATASET"],
-    ["role", "", "SOURCE|INTERMEDIATE|TARGET"],
-    ["is_temporary", "FALSE", "TRUE or FALSE"],
-    ["business_name", "", ""],
     ["description", "", ""],
-    ["owner", "", ""],
-    ["domain", "", ""],
-    ["classification", "", "PUBLIC|INTERNAL|CONFIDENTIAL|RESTRICTED|PII|PHI"]
+    ["environment", "", "DEV|TEST|UAT|PROD"],
+    ["business_domain", "", "Claims, Policy, Billing, Finance, etc."],
+    ["row_count", "", "number"],
+    ["column_count", "", "number"],
+    ["has_primary_key", "", "TRUE or FALSE"],
+    ["unique_key_columns", "", "comma-separated column names"],
+    ["grain_description", "", "e.g. one row per policy per term"],
+    ["refresh_frequency", "", "DAILY|WEEKLY|MONTHLY|AD_HOC"]
   ];
   const wsTableMeta = XLSX.utils.aoa_to_sheet(tableMetaData);
   XLSX.utils.book_append_sheet(wb, wsTableMeta, "TABLE_META");
 
   // COLUMN_METADATA
   const columnHeaders = [
-    "column_name", "business_name", "data_type", "ordinal", "nullable", 
-    "is_primary_key", "is_foreign_key", "classification", "description"
+    "column_name", "data_type", "nullable", "max_length", "precision",
+    "default_value", "column_definition", "column_computation_formula",
+    "null_count", "min_value", "max_value", "unique_count", "uniques",
+    "mean_value", "stddev_value", "sum_value"
   ];
   const wsColMeta = XLSX.utils.aoa_to_sheet([columnHeaders]);
   XLSX.utils.book_append_sheet(wb, wsColMeta, "COLUMN_METADATA");
@@ -91,19 +94,35 @@ export async function processExcelUpload(file: File, canvasId: string) {
       if (!colName) return;
 
       const existingCol = columns.find(c => c.name === colName);
-      
+
+      const num = (v: any) => (v === undefined || v === null || v === '' ? undefined : Number(v));
+      const bool = (v: any) => (v === undefined || v === null || v === '' ? undefined : String(v).toUpperCase() === 'TRUE');
+
       const newColData: ColumnDef = {
         name: colName,
         dataType: row["data_type"] || existingCol?.dataType || 'UNKNOWN',
-        ordinal: parseInt(row["ordinal"]) || existingCol?.ordinal || idx + 1,
+        ordinal: existingCol?.ordinal || idx + 1,
         origin: existingCol ? (existingCol.origin === 'LINEAGE' ? 'EXCEL' : existingCol.origin) : 'EXCEL',
         metadata: {
           ...existingCol?.metadata,
-          description: row["description"] || existingCol?.metadata?.description,
-          businessName: row["business_name"] || existingCol?.metadata?.businessName,
-          classification: row["classification"] || existingCol?.metadata?.classification,
+          nullable: bool(row["nullable"]) ?? existingCol?.metadata?.nullable,
+          maxLength: num(row["max_length"]) ?? existingCol?.metadata?.maxLength,
+          precision: num(row["precision"]) ?? existingCol?.metadata?.precision,
+          defaultValue: row["default_value"] || existingCol?.metadata?.defaultValue,
+          columnDefinition: row["column_definition"] || existingCol?.metadata?.columnDefinition,
+          columnComputationFormula: row["column_computation_formula"] || existingCol?.metadata?.columnComputationFormula,
         },
-        stats: { ...existingCol?.stats },
+        stats: {
+          ...existingCol?.stats,
+          nullCount: num(row["null_count"]) ?? existingCol?.stats?.nullCount,
+          minValue: row["min_value"] || existingCol?.stats?.minValue,
+          maxValue: row["max_value"] || existingCol?.stats?.maxValue,
+          uniqueCount: num(row["unique_count"]) ?? existingCol?.stats?.uniqueCount,
+          uniques: row["uniques"] || existingCol?.stats?.uniques,
+          meanValue: num(row["mean_value"]) ?? existingCol?.stats?.meanValue,
+          stddevValue: num(row["stddev_value"]) ?? existingCol?.stats?.stddevValue,
+          sumValue: num(row["sum_value"]) ?? existingCol?.stats?.sumValue,
+        },
         lastEditedBy: "UPLOAD"
       };
 
@@ -115,13 +134,26 @@ export async function processExcelUpload(file: File, canvasId: string) {
       }
     });
 
+    const numMeta = (v: any) => (v === undefined || v === null || v === '' ? undefined : Number(v));
+    const boolMeta = (v: any) => (v === undefined || v === null || v === '' ? undefined : String(v).toUpperCase() === 'TRUE');
+    const tableMeta = {
+      description: metaObj["description"] || undefined,
+      environment: (metaObj["environment"]?.toUpperCase() as any) || undefined,
+      businessDomain: metaObj["business_domain"] || undefined,
+      rowCount: numMeta(metaObj["row_count"]),
+      columnCount: numMeta(metaObj["column_count"]) ?? columns.length,
+      hasPrimaryKey: boolMeta(metaObj["has_primary_key"]),
+      uniqueKeyColumns: metaObj["unique_key_columns"] || undefined,
+      grainDescription: metaObj["grain_description"] || undefined,
+      refreshFrequency: (metaObj["refresh_frequency"]?.toUpperCase() as any) || undefined,
+    };
+
     if (existingNode) {
       existingNode.columns = columns;
       existingNode.origin = existingNode.origin === 'STUB' ? 'EXCEL' : existingNode.origin;
       existingNode.metadata = {
         ...existingNode.metadata,
-        description: metaObj["description"] || existingNode.metadata.description,
-        businessName: metaObj["business_name"] || existingNode.metadata.businessName,
+        ...Object.fromEntries(Object.entries(tableMeta).filter(([, v]) => v !== undefined)),
       };
       await db.tableNodes.put(existingNode);
     } else {
@@ -134,13 +166,7 @@ export async function processExcelUpload(file: File, canvasId: string) {
         qualifiedName: `${namespace}.${tableName}`,
         origin: 'EXCEL',
         completeness: 'PARTIAL',
-        metadata: {
-          objectType: (metaObj["object_type"] as any) || 'TABLE',
-          role: metaObj["role"] as any,
-          isTemporary: metaObj["is_temporary"]?.toUpperCase() === 'TRUE',
-          description: metaObj["description"],
-          businessName: metaObj["business_name"],
-        },
+        metadata: tableMeta,
         columns,
         referencedByUploadIds: [],
         createdAt: new Date().toISOString(),

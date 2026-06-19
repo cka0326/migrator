@@ -67,7 +67,7 @@ export function NewTableDialog() {
       qualifiedName: `${namespace.toUpperCase()}.${name.toUpperCase()}`,
       origin: 'MANUAL',
       completeness: 'PARTIAL',
-      metadata: { objectType: 'TABLE' },
+      metadata: {},
       columns: [],
       referencedByUploadIds: [],
       position: { x: posX, y: posY },

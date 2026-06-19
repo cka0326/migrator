@@ -15,16 +15,10 @@ export const DatasetSchema = z.object({
   namespace: z.string(),
   name: z.string(),
   qualified_name: z.string(),
-  object_type: z.enum(["TABLE", "VIEW", "EXTERNAL", "DATASET"]).optional(),
-  role: z.enum(["SOURCE", "INTERMEDIATE", "TARGET"]).optional(),
-  is_temporary: z.boolean().optional(),
-  resolved: z.boolean().optional(),
-  quoted: z.boolean().optional(),
   columns: z.array(z.object({
     name: z.string(),
     data_type: z.string(),
-    ordinal: z.number().optional(),
-    quoted: z.boolean().optional()
+    ordinal: z.number().optional()
   })).optional()
 });
 

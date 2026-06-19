@@ -47,8 +47,8 @@ export function CustomTableNode({ data, id }: NodeProps<any>) {
 
         <div className="flex justify-between items-center mt-1">
           <div className="flex gap-1 flex-wrap">
-            {metadata?.role && <Badge variant="outline" className="text-[9px] px-1 py-0">{metadata.role}</Badge>}
-            {metadata?.isTemporary && <Badge variant="destructive" className="text-[9px] px-1 py-0">TEMP</Badge>}
+            {metadata?.environment && <Badge variant="outline" className="text-[9px] px-1 py-0">{metadata.environment}</Badge>}
+            {metadata?.businessDomain && <Badge variant="outline" className="text-[9px] px-1 py-0">{metadata.businessDomain}</Badge>}
             {origin === 'STUB' && <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-orange-100 text-orange-800 border-orange-200">Metadata Pending</Badge>}
           </div>
           <button onClick={(e) => { e.stopPropagation(); toggleNodeCollapse(id); }} className="text-muted-foreground hover:text-foreground">
