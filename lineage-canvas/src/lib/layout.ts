@@ -20,7 +20,7 @@ export async function getLayoutedElements(nodes: Node[], edges: Edge[]) {
       height: 80 + ((n.data as unknown as TableNode).columns?.length || 0) * 32,
       // Pass a partition hint to try to keep them separate
       layoutOptions: {
-        'elk.partitioning.partition': (n.data as unknown as TableNode).system === 'SAS' ? 0 : 1,
+        'elk.partitioning.partition': (n.data as unknown as TableNode).system === 'LEGACY' ? 0 : 1,
       }
     })),
     edges: edges.map(e => ({

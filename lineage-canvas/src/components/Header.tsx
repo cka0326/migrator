@@ -12,6 +12,17 @@ export function Header() {
 
   const nodes = useStore(state => state.nodes);
   const selectNode = useStore(state => state.selectNode);
+  const activeCanvasId = useStore(state => state.activeCanvasId);
+  const project = useStore(state => state.activeProjectId ? state.projects[state.activeProjectId] : null);
+  const canvas = useStore(state => state.activeCanvasId ? state.canvases[state.activeCanvasId] : null);
+
+  const reloadActiveCanvas = () => {
+    const cid = useStore.getState().activeCanvasId;
+    if (cid) useStore.getState().loadCanvas(cid);
+  };
+
+  const systemLabel = (system: string) =>
+    system === 'LEGACY' ? (project?.legacySystemName || 'Legacy') : (project?.targetSystemName || 'Target');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
@@ -45,7 +56,14 @@ export function Header() {
   return (
     <header className="flex justify-between items-center px-4 py-3 border-b bg-background shadow-sm sticky top-0 z-10">
       <div className="flex items-center gap-4 flex-1">
-        <h1 className="text-xl font-semibold tracking-tight text-primary">Lineage Canvas</h1>
+        <div className="flex flex-col leading-tight">
+          <h1 className="text-base font-semibold tracking-tight text-primary">
+            {project ? project.name : 'Lineage Canvas'}
+          </h1>
+          {canvas && (
+            <span className="text-xs text-muted-foreground">{canvas.name}</span>
+          )}
+        </div>
         <div className="flex items-center gap-1 border-l pl-4 border-border">
           <Button variant="ghost" size="icon" onClick={() => undo()} disabled={pastStates.length === 0} title="Undo">
             <Undo2 className="h-4 w-4" />
@@ -83,7 +101,7 @@ export function Header() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-semibold text-sm text-slate-900 truncate">{node.name}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">{node.system}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">{systemLabel(node.system)}</span>
                     </div>
                     <div className="text-xs text-slate-500 truncate">{node.datasetId}</div>
                   </div>
@@ -108,12 +126,12 @@ export function Header() {
 
         <label className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">
           Upload Excel
-          <input type="file" className="hidden" accept=".xlsx" onChange={async (e) => {
+          <input type="file" className="hidden" accept=".xlsx" disabled={!activeCanvasId} onChange={async (e) => {
              const file = e.target.files?.[0];
-             if (file) {
+             if (file && activeCanvasId) {
                 const { processExcelUpload } = await import('../lib/excelService');
-                await processExcelUpload(file);
-                useStore.getState().loadNodes();
+                await processExcelUpload(file, activeCanvasId);
+                reloadActiveCanvas();
              }
              e.target.value = '';
           }} />
@@ -121,12 +139,12 @@ export function Header() {
 
         <label className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">
           Upload JSON
-          <input type="file" className="hidden" accept=".json" onChange={async (e) => {
+          <input type="file" className="hidden" accept=".json" disabled={!activeCanvasId} onChange={async (e) => {
              const file = e.target.files?.[0];
-             if (file) {
+             if (file && activeCanvasId) {
                 const { processLineageUpload } = await import('../lib/uploadService');
-                await processLineageUpload(file);
-                useStore.getState().loadNodes();
+                await processLineageUpload(file, activeCanvasId);
+                reloadActiveCanvas();
              }
              e.target.value = '';
           }} />

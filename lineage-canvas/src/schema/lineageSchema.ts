@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const ExtractSchema = z.object({
   extract_id: z.string(),
-  source_system: z.enum(["SAS", "SNOWFLAKE"]),
+  source_system: z.enum(["LEGACY", "TARGET"]),
   source_file_name: z.string(),
   default_namespace: z.string().optional(),
   generated_by: z.string().optional(),
@@ -11,7 +11,7 @@ export const ExtractSchema = z.object({
 
 export const DatasetSchema = z.object({
   dataset_id: z.string(),
-  system: z.enum(["SAS", "SNOWFLAKE"]),
+  system: z.enum(["LEGACY", "TARGET"]),
   namespace: z.string(),
   name: z.string(),
   qualified_name: z.string(),

@@ -18,7 +18,7 @@ export async function generateExcelTemplate() {
   // TABLE_META
   const tableMetaData = [
     ["Field", "Value", "Notes"],
-    ["system", "SAS", "SAS or SNOWFLAKE"],
+    ["system", "LEGACY", "LEGACY or TARGET"],
     ["namespace", "", "Library or Schema"],
     ["table_name", "", ""],
     ["object_type", "TABLE", "TABLE|VIEW|EXTERNAL|DATASET"],
@@ -48,7 +48,7 @@ export async function generateExcelTemplate() {
   XLSX.writeFile(wb, "Lineage_Canvas_Template.xlsx");
 }
 
-export async function processExcelUpload(file: File) {
+export async function processExcelUpload(file: File, canvasId: string) {
   const data = await file.arrayBuffer();
   const wb = XLSX.read(data);
 
@@ -70,8 +70,11 @@ export async function processExcelUpload(file: File) {
   if (!system || !namespace || !tableName) {
     throw new Error("TABLE_META must contain system, namespace, and table_name");
   }
+  if (system !== 'LEGACY' && system !== 'TARGET') {
+    throw new Error("system must be LEGACY or TARGET");
+  }
 
-  const datasetId = `${system}:${namespace}.${tableName}`;
+  const datasetId = `${canvasId}::${system}:${namespace}.${tableName}`;
 
   // Parse COLUMN_METADATA
   const wsColMeta = wb.Sheets["COLUMN_METADATA"];
@@ -124,6 +127,7 @@ export async function processExcelUpload(file: File) {
     } else {
       const newNode: TableNode = {
         datasetId,
+        canvasId,
         system,
         namespace,
         name: tableName,
@@ -147,6 +151,7 @@ export async function processExcelUpload(file: File) {
 
     await db.uploadRecs.put({
       uploadId: crypto.randomUUID(),
+      canvasId,
       kind: 'EXCEL',
       fileName: file.name,
       uploadedAt: new Date().toISOString(),

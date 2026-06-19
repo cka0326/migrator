@@ -10,20 +10,24 @@ export function UploadsRegistry() {
   const [uploads, setUploads] = useState<UploadRec[]>([]);
   const [open, setOpen] = useState(false);
 
+  const activeCanvasId = useStore(state => state.activeCanvasId);
+
   useEffect(() => {
     if (open) {
       db.uploadRecs.toArray().then(recs => {
-        setUploads(recs.sort((a,b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()));
+        const scoped = activeCanvasId ? recs.filter(r => r.canvasId === activeCanvasId) : recs;
+        setUploads(scoped.sort((a,b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()));
       });
     }
-  }, [open]);
+  }, [open, activeCanvasId]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this upload? Edges and stubs created by this upload will be removed.')) return;
     const { Repository } = await import('../db/repository');
     await Repository.deleteUpload(id);
     setUploads(uploads.filter(u => u.uploadId !== id));
-    useStore.getState().loadNodes();
+    const cid = useStore.getState().activeCanvasId;
+    if (cid) useStore.getState().loadCanvas(cid);
   };
 
   return (

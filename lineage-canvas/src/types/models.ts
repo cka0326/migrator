@@ -1,4 +1,47 @@
-export type System = "SAS" | "SNOWFLAKE";
+export type System = "LEGACY" | "TARGET";
+
+// ---------- Project / Canvas hierarchy ----------
+export interface Project {
+  id: string;                     // uuid
+  name: string;
+  legacySystemName: string;       // display label for the LEGACY system (e.g., "SAS", "Mainframe")
+  targetSystemName: string;       // display label for the TARGET system (e.g., "Snowflake", "BigQuery")
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Canvas {
+  id: string;                     // uuid — also the scope prefix for all datasetIds it owns
+  projectId: string;
+  name: string;                   // a point-in-time snapshot name (e.g., "2024-Q1", "As-Is")
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------- Saved comparison views ----------
+export interface ComparisonEndpoint {
+  datasetId: string;              // encodes the owning canvasId as its "${canvasId}::" prefix
+  column?: string;                // only used in COLUMNS mode
+}
+
+export interface ColumnPair {
+  left: ComparisonEndpoint;       // { datasetId, column }
+  right: ComparisonEndpoint;      // { datasetId, column }
+}
+
+export type ComparisonMode = "systems" | "projects" | "columns";
+
+export interface SavedComparison {
+  id: string;                     // uuid
+  projectId: string;
+  name: string;
+  mode: ComparisonMode;
+  left?: ComparisonEndpoint;      // table endpoints for systems/snapshots modes
+  right?: ComparisonEndpoint;
+  columnPairs?: ColumnPair[];     // manual column pairings for columns mode
+  createdAt: string;
+  updatedAt: string;
+}
 
 // ---------- comprehensive TABLE-level metadata (all optional, filled incrementally) ----------
 export interface TableMetadata {
@@ -68,8 +111,9 @@ export interface ColumnDef {
 }
 
 export interface TableNode {
-  datasetId: string;              // "SYSTEM:QUALIFIED_NAME" — identity + match key + React Flow node id (IMMUTABLE)
-  system: System;                 // lane (IMMUTABLE)
+  datasetId: string;              // "${canvasId}::SYSTEM:QUALIFIED_NAME" — globally unique identity + React Flow node id (IMMUTABLE)
+  canvasId: string;               // owning canvas (IMMUTABLE)
+  system: System;                 // LEGACY | TARGET tab (IMMUTABLE)
   namespace: string;              // SAS library | "DATABASE.SCHEMA" (IMMUTABLE)
   name: string;                   // table/dataset name (IMMUTABLE)
   qualifiedName: string;          // canonical UPPERCASE
@@ -88,6 +132,7 @@ export interface TableNode {
 
 export interface ProcessRec {            // a transformation/step from a lineage extract
   processId: string;
+  canvasId: string;               // owning canvas
   uploadId: string;               // provenance
   sequence: number;
   name: string;
@@ -102,6 +147,7 @@ export interface ProcessRec {            // a transformation/step from a lineage
 
 export interface TableEdge {
   edgeId: string;
+  canvasId: string;               // owning canvas
   uploadId: string;               // provenance
   fromDataset: string;            // datasetId
   toDataset: string;              // datasetId
@@ -110,6 +156,7 @@ export interface TableEdge {
 
 export interface ColumnEdge {
   edgeId: string;
+  canvasId: string;               // owning canvas
   uploadId: string;               // provenance
   target: { datasetId: string; column: string };
   sources: { datasetId: string; column: string }[];
@@ -122,6 +169,7 @@ export interface ColumnEdge {
 
 export interface UploadRec {             // the provenance registry — one row per upload event
   uploadId: string;               // app-generated UUID, stamped onto everything it creates
+  canvasId: string;               // owning canvas
   kind: "EXCEL" | "LINEAGE_JSON";
   fileName: string;
   system?: System;                // for JSON: the extract's source_system

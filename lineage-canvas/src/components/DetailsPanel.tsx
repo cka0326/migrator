@@ -15,8 +15,12 @@ export function DetailsPanel() {
   const nodes = useStore(state => state.nodes);
   const updateTableMetadata = useStore(state => state.updateTableMetadata);
   const deleteTableNode = useStore(state => state.deleteTableNode);
+  const project = useStore(state => state.activeProjectId ? state.projects[state.activeProjectId] : null);
 
   const node = selectedNodeId ? nodes[selectedNodeId] : null;
+  const systemLabel = node
+    ? (node.system === 'LEGACY' ? (project?.legacySystemName || 'Legacy') : (project?.targetSystemName || 'Target'))
+    : '';
 
   const [meta, setMeta] = useState<TableMetadata | null>(null);
 
@@ -47,7 +51,7 @@ export function DetailsPanel() {
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <span className="font-mono text-sm font-bold text-[#333333] truncate">{node.name}</span>
                 <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 border-[#999999] bg-[#ffffff] shrink-0">
-                  {node.system}
+                  {systemLabel}
                 </Badge>
               </div>
               <Button

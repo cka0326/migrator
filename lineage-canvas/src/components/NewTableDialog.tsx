@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Button } from './ui/button';
@@ -9,25 +9,37 @@ import type { System, TableNode } from '../types/models';
 
 export function NewTableDialog() {
   const [open, setOpen] = useState(false);
-  const [system, setSystem] = useState<System>('SAS');
-  const [namespace, setNamespace] = useState('');
-  const [name, setName] = useState('');
   const addTableNode = useStore(state => state.addTableNode);
   const nodes = useStore(state => state.nodes);
+  const activeCanvasId = useStore(state => state.activeCanvasId);
+  const activeSystemTab = useStore(state => state.activeSystemTab);
+  const project = useStore(state => state.activeProjectId ? state.projects[state.activeProjectId] : null);
 
-  const datasetId = `${system}:${namespace ? namespace.toUpperCase() + '.' : ''}${name.toUpperCase()}`;
+  const [system, setSystem] = useState<System>(activeSystemTab);
+  const [namespace, setNamespace] = useState('');
+  const [name, setName] = useState('');
+
+  // Keep the dialog's default system in sync with the tab the user is on when they open it.
+  useEffect(() => {
+    if (open) setSystem(activeSystemTab);
+  }, [open, activeSystemTab]);
+
+  const legacyLabel = project?.legacySystemName || 'Legacy';
+  const targetLabel = project?.targetSystemName || 'Target';
+
+  const datasetId = `${activeCanvasId}::${system}:${namespace ? namespace.toUpperCase() + '.' : ''}${name.toUpperCase()}`;
   const isDuplicate = !!nodes[datasetId];
-  const canSubmit = namespace.trim() && name.trim() && !isDuplicate;
+  const canSubmit = !!activeCanvasId && namespace.trim() && name.trim() && !isDuplicate;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit || !activeCanvasId) return;
 
     // Calculate a default position to avoid stacking at 0,0
     const existingNodesList = Object.values(nodes);
     const laneNodes = existingNodesList.filter(n => n.system === system);
     let posX = 100;
-    let posY = system === 'SAS' ? 100 : 500;
+    let posY = 100;
 
     if (laneNodes.length > 0) {
       let maxX = 100;
@@ -48,6 +60,7 @@ export function NewTableDialog() {
 
     const node: TableNode = {
       datasetId,
+      canvasId: activeCanvasId,
       system,
       namespace: namespace.toUpperCase(),
       name: name.toUpperCase(),
@@ -79,14 +92,14 @@ export function NewTableDialog() {
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-4">
           <div className="space-y-2">
-            <Label>System (Lane)</Label>
+            <Label>System</Label>
             <Select value={system} onValueChange={(val) => setSystem(val as System)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="SAS">SAS</SelectItem>
-                <SelectItem value="SNOWFLAKE">Snowflake</SelectItem>
+                <SelectItem value="LEGACY">{legacyLabel} (Legacy)</SelectItem>
+                <SelectItem value="TARGET">{targetLabel} (Target)</SelectItem>
               </SelectContent>
             </Select>
           </div>

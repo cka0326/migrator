@@ -9,8 +9,13 @@ import { useStore } from '../../store/useStore';
 export function CustomTableNode({ data, id }: NodeProps<any>) {
   const selectNode = useStore(state => state.selectNode);
   const toggleNodeCollapse = useStore(state => state.toggleNodeCollapse);
+  const project = useStore(state => state.activeProjectId ? state.projects[state.activeProjectId] : null);
 
   const { name, namespace, system, origin, columns, metadata, collapsed } = data as any;
+
+  const systemLabel = system === 'LEGACY'
+    ? (project?.legacySystemName || 'Legacy')
+    : (project?.targetSystemName || 'Target');
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -37,7 +42,7 @@ export function CustomTableNode({ data, id }: NodeProps<any>) {
             <span className="text-xs text-muted-foreground">{namespace}</span>
             <span className="font-semibold text-sm leading-tight break-all">{name}</span>
           </div>
-          <Badge variant={system === 'SAS' ? 'default' : 'secondary'} className="text-[10px] px-1 py-0">{system}</Badge>
+          <Badge variant={system === 'LEGACY' ? 'default' : 'secondary'} className="text-[10px] px-1 py-0">{systemLabel}</Badge>
         </div>
 
         <div className="flex justify-between items-center mt-1">

@@ -4,7 +4,7 @@ import { LineageExtractSchema } from '../schema/lineageSchema';
 import type { UploadRec, ProcessRec, TableEdge, ColumnEdge, TableNode, ColumnDef, System } from '../types/models';
 import { db } from './database';
 
-export async function ingestLineageJSON(fileContent: string, fileName: string) {
+export async function ingestLineageJSON(fileContent: string, fileName: string, canvasId: string) {
   let parsed: any;
   try {
     parsed = JSON.parse(fileContent);
@@ -20,6 +20,9 @@ export async function ingestLineageJSON(fileContent: string, fileName: string) {
   const data = result.data;
   const uploadId = uuidv4();
   const system = data.extract.source_system as System;
+
+  // Every datasetId is scoped to the owning canvas so it is globally unique.
+  const scope = (id: string) => `${canvasId}::${id}`;
 
   let stubsCreated = 0;
   
@@ -39,7 +42,8 @@ export async function ingestLineageJSON(fileContent: string, fileName: string) {
     
     // 1. Reconcile Datasets
     for (const ds of data.datasets) {
-      const existingNode = await db.tableNodes.get(ds.dataset_id);
+      const scopedDatasetId = scope(ds.dataset_id);
+      const existingNode = await db.tableNodes.get(scopedDatasetId);
       
       const extractColumns = ds.columns || [];
       const edgeCols = edgeReferencedColumns.get(ds.dataset_id) || new Set();
@@ -70,7 +74,8 @@ export async function ingestLineageJSON(fileContent: string, fileName: string) {
         await db.tableNodes.put(existingNode);
       } else {
         const newNode: TableNode = {
-            datasetId: ds.dataset_id,
+            datasetId: scopedDatasetId,
+            canvasId,
             system: ds.system as System,
             namespace: ds.namespace,
             name: ds.name,
@@ -95,15 +100,16 @@ export async function ingestLineageJSON(fileContent: string, fileName: string) {
 
     // 2. Create Processes
     const processRecs: ProcessRec[] = data.processes.map(p => ({
-      processId: p.process_id,
+      processId: `${canvasId}::${p.process_id}`,
+      canvasId,
       uploadId,
       sequence: p.sequence || 0,
       name: p.name || p.process_id,
       operationType: p.operation_type,
       sourceFile: p.source_file,
       codeLocation: p.code_location ? { startLine: p.code_location.start_line || null, endLine: p.code_location.end_line || null } : undefined,
-      inputs: p.inputs,
-      outputs: p.outputs,
+      inputs: p.inputs.map(scope),
+      outputs: p.outputs.map(scope),
       description: p.description,
       snippet: p.snippet
     }));
@@ -111,21 +117,23 @@ export async function ingestLineageJSON(fileContent: string, fileName: string) {
 
     // 3. Create TableEdges
     const tableEdges: TableEdge[] = data.table_edges.map(te => ({
-      edgeId: te.edge_id,
+      edgeId: `${canvasId}::${te.edge_id}`,
+      canvasId,
       uploadId,
-      fromDataset: te.from_dataset,
-      toDataset: te.to_dataset,
-      processId: te.process_id
+      fromDataset: scope(te.from_dataset),
+      toDataset: scope(te.to_dataset),
+      processId: `${canvasId}::${te.process_id}`
     }));
     if (tableEdges.length > 0) await db.tableEdges.bulkAdd(tableEdges);
 
     // 4. Create ColumnEdges
     const columnEdges: ColumnEdge[] = data.column_edges.map(ce => ({
-      edgeId: ce.edge_id,
+      edgeId: `${canvasId}::${ce.edge_id}`,
+      canvasId,
       uploadId,
-      target: { datasetId: ce.target.dataset_id, column: ce.target.column },
-      sources: ce.sources.map((s: any) => ({ datasetId: s.dataset_id, column: s.column })),
-      processId: ce.process_id,
+      target: { datasetId: scope(ce.target.dataset_id), column: ce.target.column },
+      sources: ce.sources.map((s: any) => ({ datasetId: scope(s.dataset_id), column: s.column })),
+      processId: `${canvasId}::${ce.process_id}`,
       transformationType: ce.transformation_type as any,
       expression: ce.expression,
       confidence: ce.confidence as any
@@ -135,6 +143,7 @@ export async function ingestLineageJSON(fileContent: string, fileName: string) {
     // 5. Create UploadRec
     const uploadRec: UploadRec = {
       uploadId,
+      canvasId,
       kind: 'LINEAGE_JSON',
       fileName,
       system,

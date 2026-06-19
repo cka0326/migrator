@@ -2,12 +2,12 @@ import { db } from '../db/database';
 import { ingestLineageJSON } from '../db/ingestion';
 import type { TableNode } from '../types/models';
 
-export async function processLineageUpload(file: File) {
+export async function processLineageUpload(file: File, canvasId: string) {
   const content = await file.text();
-  
+
   const existingUploads = await db.uploadRecs
     .where('fileName').equals(file.name)
-    .filter(u => u.status === 'ACTIVE' && u.kind === 'LINEAGE_JSON')
+    .filter(u => u.status === 'ACTIVE' && u.kind === 'LINEAGE_JSON' && u.canvasId === canvasId)
     .toArray();
 
   if (existingUploads.length > 0) {
@@ -42,5 +42,5 @@ export async function processLineageUpload(file: File) {
     }
   }
 
-  await ingestLineageJSON(content, file.name);
+  await ingestLineageJSON(content, file.name, canvasId);
 }

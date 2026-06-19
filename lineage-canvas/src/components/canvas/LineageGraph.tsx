@@ -16,26 +16,24 @@ const edgeTypes = { tableEdge: CustomTableEdge as any, columnEdge: CustomColumnE
 
 interface SystemCanvasProps {
   system: System;
-  title: string;
-  bgColor: string;
-  dotColor: string;
 }
 
-function SystemCanvas({ system, title, bgColor, dotColor }: SystemCanvasProps) {
+function SystemCanvas({ system }: SystemCanvasProps) {
   const storeNodes = useStore(state => state.nodes);
   const storeTableEdges = useStore(state => state.tableEdges);
   const storeColumnEdges = useStore(state => state.columnEdges);
-  
+  const activeCanvasId = useStore(state => state.activeCanvasId);
+
   const updateTableNodePosition = useStore(state => state.updateTableNodePosition);
   const updateTableNodePositions = useStore(state => state.updateTableNodePositions);
-  
+
   const addTableEdge = useStore(state => state.addTableEdge);
   const addColumnEdge = useStore(state => state.addColumnEdge);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // Filter nodes & edges for this system
+  // The store already holds only the active canvas's data; filter to this system tab.
   const systemNodes = useMemo(() => {
     return Object.values(storeNodes).filter(n => n.system === system);
   }, [storeNodes, system]);
@@ -57,7 +55,7 @@ function SystemCanvas({ system, title, bgColor, dotColor }: SystemCanvasProps) {
 
   const initialNodes = useMemo(() => {
     const placedNodes: any[] = [];
-    
+
     // First place all nodes that already have a position in the store
     for (const node of systemNodes) {
       if (node.position) {
@@ -69,14 +67,14 @@ function SystemCanvas({ system, title, bgColor, dotColor }: SystemCanvasProps) {
         });
       }
     }
-    
+
     // Sequentially compute positions for nodes that don't have one
     for (const node of systemNodes) {
       if (!node.position) {
         const laneNodes = placedNodes;
         let posX = 100;
         let posY = 100;
-        
+
         if (laneNodes.length > 0) {
           let maxX = 100;
           let sumY = 0;
@@ -87,7 +85,7 @@ function SystemCanvas({ system, title, bgColor, dotColor }: SystemCanvasProps) {
           posX = maxX + 320;
           posY = Math.round(sumY / laneNodes.length);
         }
-        
+
         const newNode = {
           id: node.datasetId,
           type: 'tableNode',
@@ -97,7 +95,7 @@ function SystemCanvas({ system, title, bgColor, dotColor }: SystemCanvasProps) {
         placedNodes.push(newNode);
       }
     }
-    
+
     return placedNodes;
   }, [systemNodes]);
 
@@ -112,7 +110,7 @@ function SystemCanvas({ system, title, bgColor, dotColor }: SystemCanvasProps) {
       data: e as any,
     }));
 
-    const columnFlowEdges: Edge[] = systemColumnEdges.flatMap(e => 
+    const columnFlowEdges: Edge[] = systemColumnEdges.flatMap(e =>
       e.sources.map((src, i) => {
         const isSourceCollapsed = storeNodes[src.datasetId]?.collapsed;
         const isTargetCollapsed = storeNodes[e.target.datasetId]?.collapsed;
@@ -164,12 +162,13 @@ function SystemCanvas({ system, title, bgColor, dotColor }: SystemCanvasProps) {
 
   const onConnect = useCallback(async (params: any) => {
     const { source, target, sourceHandle, targetHandle } = params;
-    if (!source || !target || !sourceHandle || !targetHandle) return;
+    if (!source || !target || !sourceHandle || !targetHandle || !activeCanvasId) return;
 
     if (sourceHandle === 'table-source' && targetHandle === 'table-target') {
       const edgeId = `TE|${source}|${target}|MANUAL`;
       const tableEdge: TableEdge = {
         edgeId,
+        canvasId: activeCanvasId,
         uploadId: 'MANUAL',
         fromDataset: source,
         toDataset: target,
@@ -182,6 +181,7 @@ function SystemCanvas({ system, title, bgColor, dotColor }: SystemCanvasProps) {
       const edgeId = `CE|${target}::${targetCol}|${source}::${sourceCol}|MANUAL`;
       const columnEdge: ColumnEdge = {
         edgeId,
+        canvasId: activeCanvasId,
         uploadId: 'MANUAL',
         target: { datasetId: target, column: targetCol },
         sources: [{ datasetId: source, column: sourceCol }],
@@ -191,18 +191,10 @@ function SystemCanvas({ system, title, bgColor, dotColor }: SystemCanvasProps) {
       };
       await addColumnEdge(columnEdge);
     }
-  }, [addTableEdge, addColumnEdge]);
-
-  const titleStyle = system === 'SAS' 
-    ? "bg-blue-100 text-blue-900 border-blue-200" 
-    : "bg-teal-100 text-teal-900 border-teal-200";
+  }, [addTableEdge, addColumnEdge, activeCanvasId]);
 
   return (
-    <div className={`w-full h-full relative ${bgColor}`}>
-      <div className={`absolute top-3 left-4 z-10 font-bold px-3 py-1.5 rounded-md text-xs tracking-wider uppercase shadow-sm border select-none pointer-events-none ${titleStyle}`}>
-        {title}
-      </div>
-      
+    <div className="w-full h-full relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -214,7 +206,7 @@ function SystemCanvas({ system, title, bgColor, dotColor }: SystemCanvasProps) {
         edgeTypes={edgeTypes}
         fitView
       >
-        <Background variant={BackgroundVariant.Dots} gap={12} size={1} color={dotColor} />
+        <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#cbd5e1" />
         <Controls />
       </ReactFlow>
 
@@ -228,25 +220,50 @@ function SystemCanvas({ system, title, bgColor, dotColor }: SystemCanvasProps) {
 }
 
 export function LineageGraph() {
+  const activeCanvasId = useStore(state => state.activeCanvasId);
+  const activeSystemTab = useStore(state => state.activeSystemTab);
+  const setActiveSystemTab = useStore(state => state.setActiveSystemTab);
+  const project = useStore(state => state.activeProjectId ? state.projects[state.activeProjectId] : null);
+
+  if (!activeCanvasId) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-center text-slate-400">
+        <div>
+          <p className="text-sm font-medium">No canvas selected</p>
+          <p className="text-xs mt-1">Create or pick a project and canvas from the sidebar to begin.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const legacyLabel = project?.legacySystemName || 'Legacy';
+  const targetLabel = project?.targetSystemName || 'Target';
+
+  const tabBtn = (system: System, label: string) => (
+    <button
+      onClick={() => setActiveSystemTab(system)}
+      className={`px-4 py-1.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+        activeSystemTab === system
+          ? 'border-primary text-primary'
+          : 'border-transparent text-slate-500 hover:text-slate-800'
+      }`}
+    >
+      {label}
+      <span className="ml-1.5 text-[10px] uppercase tracking-wider text-slate-400">
+        {system === 'LEGACY' ? 'Legacy' : 'Target'}
+      </span>
+    </button>
+  );
+
   return (
     <div className="flex flex-col h-full w-full">
-      {/* SAS Canvas */}
-      <div className="flex-1 relative h-1/2 border-b-2 border-slate-200">
-        <SystemCanvas 
-          system="SAS" 
-          title="SAS Source System (Legacy)" 
-          bgColor="bg-blue-50/10" 
-          dotColor="#3b82f6" 
-        />
+      <div className="flex items-center gap-1 border-b bg-background px-3 shrink-0">
+        {tabBtn('LEGACY', legacyLabel)}
+        {tabBtn('TARGET', targetLabel)}
       </div>
-      {/* Snowflake Canvas */}
-      <div className="flex-1 relative h-1/2">
-        <SystemCanvas 
-          system="SNOWFLAKE" 
-          title="Snowflake Target System" 
-          bgColor="bg-teal-50/10" 
-          dotColor="#0d9488" 
-        />
+      <div className="flex-1 relative">
+        {/* key forces a fresh ReactFlow instance per system tab so positions/fitView reset cleanly */}
+        <SystemCanvas key={`${activeCanvasId}:${activeSystemTab}`} system={activeSystemTab} />
       </div>
     </div>
   );
