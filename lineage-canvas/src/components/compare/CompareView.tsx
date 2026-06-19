@@ -11,6 +11,9 @@ import { ArrowLeft, GitCompare, Plus, Save, Trash2, ChevronDown, ChevronRight, S
 
 const canvasOf = (datasetId: string) => datasetId.slice(0, datasetId.indexOf('::'));
 
+// Tables are identified by namespace.table, so always show the qualified name.
+const tableLabel = (t: TableNode) => (t.namespace ? `${t.namespace}.${t.name}` : t.name);
+
 interface ColEndpoint { canvasId?: string; tableId?: string; column?: string }
 interface ProjSel { projectId?: string; canvasId?: string; tableId?: string }
 
@@ -52,14 +55,14 @@ function TablePicker(props: TablePickerProps) {
               <SelectValue placeholder="Select table">
                 {(v: string) => {
                   const t = tables.find(t => t.datasetId === v);
-                  return t ? `${t.name} · ${systemLabel(t.system)}` : 'Select table';
+                  return t ? `${tableLabel(t)} · ${systemLabel(t.system)}` : 'Select table';
                 }}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {tables.length === 0 && <SelectItem value="__none" disabled>No tables</SelectItem>}
               {tables.map(t => (
-                <SelectItem key={t.datasetId} value={t.datasetId}>{t.name} · {systemLabel(t.system)}</SelectItem>
+                <SelectItem key={t.datasetId} value={t.datasetId}>{tableLabel(t)} · {systemLabel(t.system)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -121,7 +124,7 @@ function ProjectTablePicker({ title, accent, projectOptions, allCanvases, tables
               <SelectValue placeholder="Table">
                 {(v: string) => {
                   const t = tables.find(t => t.datasetId === v);
-                  return t ? `${t.name} · ${systemLabel(t.system)}` : 'Table';
+                  return t ? `${tableLabel(t)} · ${systemLabel(t.system)}` : 'Table';
                 }}
               </SelectValue>
             </SelectTrigger>
@@ -129,7 +132,7 @@ function ProjectTablePicker({ title, accent, projectOptions, allCanvases, tables
               {tables.length === 0 && <SelectItem value="__none" disabled>No tables</SelectItem>}
               {tables.map(t => (
                 <SelectItem key={t.datasetId} value={t.datasetId}>
-                  {t.name}
+                  {tableLabel(t)}
                   <span className={`ml-1.5 text-[9px] px-1 py-px rounded font-semibold uppercase ${t.system === 'LEGACY' ? 'bg-blue-100 text-blue-700' : 'bg-teal-100 text-teal-700'}`}>
                     {systemLabel(t.system)}
                   </span>
@@ -181,13 +184,13 @@ function ColumnPicker({ title, accent, canvasOptions, tablesByCanvas, value, onC
               <SelectValue placeholder="Table">
                 {(v: string) => {
                   const t = tables.find(t => t.datasetId === v);
-                  return t ? `${t.name} · ${systemLabel(t.system)}` : 'Table';
+                  return t ? `${tableLabel(t)} · ${systemLabel(t.system)}` : 'Table';
                 }}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {tables.length === 0 && <SelectItem value="__none" disabled>No tables</SelectItem>}
-              {tables.map(t => <SelectItem key={t.datasetId} value={t.datasetId}>{t.name} · {systemLabel(t.system)}</SelectItem>)}
+              {tables.map(t => <SelectItem key={t.datasetId} value={t.datasetId}>{tableLabel(t)} · {systemLabel(t.system)}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -373,7 +376,8 @@ export function CompareView() {
     const canvas = canvases[cId];
     const projectName = canvas ? (projects[canvas.projectId]?.name ?? '') : '';
     const canvasName = canvas?.name ?? cId;
-    const tName = (tablesByCanvas[cId] || []).find(t => t.datasetId === datasetId)?.name ?? datasetId;
+    const t = (tablesByCanvas[cId] || []).find(t => t.datasetId === datasetId);
+    const tName = t ? tableLabel(t) : datasetId;
     const parts = column !== undefined ? [projectName, canvasName, tName, column] : [projectName, canvasName, tName];
     return parts.map((p, i) => (
       <span key={i}>
@@ -487,13 +491,13 @@ export function CompareView() {
                         {inLeft && (
                           <span className="inline-flex items-center gap-1 text-[10px] text-blue-700">
                             <span className="px-1 py-px rounded bg-blue-100 font-semibold">A</span>
-                            <span className="font-mono break-all">{leftTable.name}</span>
+                            <span className="font-mono break-all">{tableLabel(leftTable)}</span>
                           </span>
                         )}
                         {inRight && (
                           <span className="inline-flex items-center gap-1 text-[10px] text-teal-700">
                             <span className="px-1 py-px rounded bg-teal-100 font-semibold">B</span>
-                            <span className="font-mono break-all">{rightTable.name}</span>
+                            <span className="font-mono break-all">{tableLabel(rightTable)}</span>
                           </span>
                         )}
                       </div>
