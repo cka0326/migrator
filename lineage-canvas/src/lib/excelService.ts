@@ -1,189 +1,337 @@
 import * as XLSX from 'xlsx';
+import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/database';
-import type { TableNode, ColumnDef, System } from '../types/models';
+import { Repository } from '../db/repository';
+import type {
+  TableNode, ColumnDef, System, Project, Canvas,
+  ProcessRec, TableEdge, ColumnEdge, UploadRec, TableMetadata,
+} from '../types/models';
 
-export async function generateExcelTemplate() {
-  const wb = XLSX.utils.book_new();
+// Sheets the importer never treats as a table.
+const RESERVED_SHEETS = new Set(['INSTRUCTIONS', 'MASTER']);
+// Table-level metadata keys on a table sheet. table_name lives in the MASTER
+// registry, not on the sheet.
+const TABLE_META_KEYS = new Set([
+  'system', 'namespace', 'description', 'environment', 'business_domain',
+  'row_count', 'column_count', 'has_primary_key', 'unique_key_columns',
+  'grain_description', 'refresh_frequency',
+]);
 
-  // README
-  const readmeData = [
-    ["Lineage Canvas Metadata Template"],
-    [""],
-    ["Fill out TABLE_META and COLUMN_METADATA sheets. DATA sheet is optional for inferring stats."],
-    ["Do not rename the sheets."]
-  ];
-  const wsReadme = XLSX.utils.aoa_to_sheet(readmeData);
-  XLSX.utils.book_append_sheet(wb, wsReadme, "README");
+type Row = any[];
+const cell = (r: Row | undefined, i: number) => (r ? r[i] : undefined);
+const str = (v: any) => (v === undefined || v === null ? '' : String(v).trim());
+const num = (v: any) => (v === undefined || v === null || v === '' ? undefined : Number(v));
+const bool = (v: any) => (v === undefined || v === null || v === '' ? undefined : str(v).toUpperCase() === 'TRUE');
+const upper = (v: any) => str(v).toUpperCase();
+// "UNASSIGNED" is the app's sentinel for "no value" (see DetailsPanel.tsx).
+const enumVal = (v: any) => { const u = upper(v); return u && u !== 'UNASSIGNED' ? u : undefined; };
 
-  // TABLE_META
-  const tableMetaData = [
-    ["Field", "Value", "Notes"],
-    ["system", "LEGACY", "LEGACY or TARGET"],
-    ["namespace", "", "Library or Schema"],
-    ["table_name", "", ""],
-    ["description", "", ""],
-    ["environment", "", "DEV|TEST|UAT|PROD"],
-    ["business_domain", "", "Claims, Policy, Billing, Finance, etc."],
-    ["row_count", "", "number"],
-    ["column_count", "", "number"],
-    ["has_primary_key", "", "TRUE or FALSE"],
-    ["unique_key_columns", "", "comma-separated column names"],
-    ["grain_description", "", "e.g. one row per policy per term"],
-    ["refresh_frequency", "", "DAILY|WEEKLY|MONTHLY|AD_HOC"]
-  ];
-  const wsTableMeta = XLSX.utils.aoa_to_sheet(tableMetaData);
-  XLSX.utils.book_append_sheet(wb, wsTableMeta, "TABLE_META");
+// ---------------------------------------------------------------------------
+// Parsing helpers
+// ---------------------------------------------------------------------------
 
-  // COLUMN_METADATA
-  const columnHeaders = [
-    "column_name", "data_type", "nullable", "max_length", "precision",
-    "default_value", "column_definition", "column_computation_formula",
-    "null_count", "min_value", "max_value", "unique_count", "uniques",
-    "mean_value", "stddev_value", "sum_value"
-  ];
-  const wsColMeta = XLSX.utils.aoa_to_sheet([columnHeaders]);
-  XLSX.utils.book_append_sheet(wb, wsColMeta, "COLUMN_METADATA");
-
-  // DATA
-  const wsData = XLSX.utils.aoa_to_sheet([["col1", "col2"]]);
-  XLSX.utils.book_append_sheet(wb, wsData, "DATA");
-
-  XLSX.writeFile(wb, "Lineage_Canvas_Template.xlsx");
+/** Read a table sheet into its table-level metadata block + column rows. */
+function parseTableSheet(rows: Row[]) {
+  const meta: Record<string, any> = {};
+  for (const row of rows) {
+    const key = str(cell(row, 0));
+    if (TABLE_META_KEYS.has(key)) meta[key] = cell(row, 1);
+  }
+  const headerIdx = rows.findIndex(r => str(cell(r, 0)) === 'column_name');
+  const columns: Record<string, any>[] = [];
+  if (headerIdx !== -1) {
+    const headers = (rows[headerIdx] || []).map(h => str(h));
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!str(cell(row, 0))) continue;
+      const obj: Record<string, any> = {};
+      headers.forEach((h, idx) => { if (h) obj[h] = cell(row, idx); });
+      columns.push(obj);
+    }
+  }
+  return { meta, columns };
 }
 
-export async function processExcelUpload(file: File, canvasId: string) {
+/** Read a stacked MASTER section (header row + the rows beneath it, up to endIdx). */
+function readSection(rows: Row[], headerKey: string, endIdx: number) {
+  const headerIdx = rows.findIndex(r => str(cell(r, 0)) === headerKey);
+  if (headerIdx === -1) return [];
+  const headers = (rows[headerIdx] || []).map(h => str(h));
+  const stop = endIdx === -1 ? rows.length : endIdx;
+  const out: Record<string, any>[] = [];
+  for (let i = headerIdx + 1; i < stop; i++) {
+    const row = rows[i];
+    const first = str(cell(row, 0));
+    if (!first || /^\d\)/.test(first)) continue; // skip blanks & section titles
+    const obj: Record<string, any> = {};
+    headers.forEach((h, idx) => { if (h) obj[h] = cell(row, idx); });
+    out.push(obj);
+  }
+  return out;
+}
+
+function parseMaster(rows: Row[]) {
+  const project: Record<string, any> = {};
+  for (const row of rows) {
+    const key = str(cell(row, 0));
+    if (['project_name', 'legacy_system_name', 'target_system_name', 'canvas_name'].includes(key)) {
+      project[key] = cell(row, 1);
+    }
+  }
+  const tcIdx = rows.findIndex(r => str(cell(r, 0)) === 'from_table');
+  const ccIdx = rows.findIndex(r => str(cell(r, 0)) === 'target_table');
+  const registry = readSection(rows, 'sheet_name', tcIdx);
+  const tableConnections = readSection(rows, 'from_table', ccIdx === -1 ? -1 : ccIdx);
+  const columnConnections = readSection(rows, 'target_table', -1);
+  return { project, registry, tableConnections, columnConnections };
+}
+
+// ---------------------------------------------------------------------------
+// Node upsert
+// ---------------------------------------------------------------------------
+
+function buildTableMeta(meta: Record<string, any>, columnCount: number): TableMetadata {
+  return {
+    description: str(meta['description']) || undefined,
+    environment: enumVal(meta['environment']) as any,
+    businessDomain: str(meta['business_domain']) || undefined,
+    rowCount: num(meta['row_count']),
+    columnCount: num(meta['column_count']) ?? columnCount,
+    hasPrimaryKey: bool(meta['has_primary_key']),
+    uniqueKeyColumns: str(meta['unique_key_columns']) || undefined,
+    grainDescription: str(meta['grain_description']) || undefined,
+    refreshFrequency: enumVal(meta['refresh_frequency']) as any,
+  };
+}
+
+async function upsertTable(canvasId: string, tableName: string, meta: Record<string, any>, columnRows: Record<string, any>[]) {
+  const system = upper(meta['system']) as System;
+  const namespace = upper(meta['namespace']);
+  if (system !== 'LEGACY' && system !== 'TARGET') {
+    throw new Error(`Table "${tableName}": system must be LEGACY or TARGET (got "${str(meta['system']) || 'blank'}").`);
+  }
+  if (!namespace) throw new Error(`Table "${tableName}": namespace is required on its sheet.`);
+
+  const datasetId = `${canvasId}::${system}:${namespace}.${tableName}`;
+  const existingNode = await db.tableNodes.get(datasetId);
+  const columns: ColumnDef[] = existingNode ? [...existingNode.columns] : [];
+
+  columnRows.forEach((row, idx) => {
+    const colName = upper(row['column_name']);
+    if (!colName) return;
+    const existingCol = columns.find(c => c.name === colName);
+    const newCol: ColumnDef = {
+      name: colName,
+      dataType: str(row['data_type']) || existingCol?.dataType || 'UNKNOWN',
+      ordinal: existingCol?.ordinal || idx + 1,
+      origin: existingCol ? (existingCol.origin === 'LINEAGE' ? 'EXCEL' : existingCol.origin) : 'EXCEL',
+      metadata: {
+        ...existingCol?.metadata,
+        nullable: bool(row['nullable']) ?? existingCol?.metadata?.nullable,
+        maxLength: num(row['max_length']) ?? existingCol?.metadata?.maxLength,
+        precision: num(row['precision']) ?? existingCol?.metadata?.precision,
+        defaultValue: str(row['default_value']) || existingCol?.metadata?.defaultValue,
+        columnDefinition: str(row['column_definition']) || existingCol?.metadata?.columnDefinition,
+        columnComputationFormula: str(row['column_computation_formula']) || existingCol?.metadata?.columnComputationFormula,
+      },
+      stats: {
+        ...existingCol?.stats,
+        nullCount: num(row['null_count']) ?? existingCol?.stats?.nullCount,
+        minValue: str(row['min_value']) || existingCol?.stats?.minValue,
+        maxValue: str(row['max_value']) || existingCol?.stats?.maxValue,
+        uniqueCount: num(row['unique_count']) ?? existingCol?.stats?.uniqueCount,
+        uniques: str(row['uniques']) || existingCol?.stats?.uniques,
+        meanValue: num(row['mean_value']) ?? existingCol?.stats?.meanValue,
+        stddevValue: num(row['stddev_value']) ?? existingCol?.stats?.stddevValue,
+        sumValue: num(row['sum_value']) ?? existingCol?.stats?.sumValue,
+      },
+      lastEditedBy: 'UPLOAD',
+    };
+    const cIdx = columns.findIndex(c => c.name === colName);
+    if (cIdx !== -1) columns[cIdx] = newCol; else columns.push(newCol);
+  });
+
+  const tableMeta = buildTableMeta(meta, columns.length);
+  const now = new Date().toISOString();
+
+  if (existingNode) {
+    existingNode.columns = columns;
+    existingNode.origin = existingNode.origin === 'STUB' ? 'EXCEL' : existingNode.origin;
+    existingNode.metadata = {
+      ...existingNode.metadata,
+      ...Object.fromEntries(Object.entries(tableMeta).filter(([, v]) => v !== undefined)),
+    };
+    existingNode.updatedAt = now;
+    await db.tableNodes.put(existingNode);
+    return datasetId;
+  }
+
+  const newNode: TableNode = {
+    datasetId,
+    canvasId,
+    system,
+    namespace,
+    name: tableName,
+    qualifiedName: `${namespace}.${tableName}`,
+    origin: 'EXCEL',
+    completeness: 'PARTIAL',
+    metadata: tableMeta,
+    columns,
+    referencedByUploadIds: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+  await db.tableNodes.put(newNode);
+  return datasetId;
+}
+
+// ---------------------------------------------------------------------------
+// Project / canvas resolution (from the MASTER sheet)
+// ---------------------------------------------------------------------------
+
+async function resolveCanvas(project: Record<string, any>, fallbackCanvasId: string | null): Promise<string> {
+  const projectName = str(project['project_name']);
+  if (!projectName) {
+    if (!fallbackCanvasId) {
+      throw new Error('No project_name on the MASTER sheet and no canvas is open. Set MASTER!project_name or open a canvas first.');
+    }
+    return fallbackCanvasId;
+  }
+
+  const now = new Date().toISOString();
+  const projects = await Repository.getAllProjects();
+  let proj = projects.find(p => p.name.toLowerCase() === projectName.toLowerCase());
+  if (!proj) {
+    proj = {
+      id: uuidv4(),
+      name: projectName,
+      legacySystemName: str(project['legacy_system_name']) || 'Legacy',
+      targetSystemName: str(project['target_system_name']) || 'Target',
+      createdAt: now,
+      updatedAt: now,
+    } as Project;
+    await Repository.saveProject(proj);
+  }
+
+  const canvasName = str(project['canvas_name']) || 'Imported';
+  const canvases = await Repository.getCanvasesByProject(proj.id);
+  let canvas = canvases.find(c => c.name.toLowerCase() === canvasName.toLowerCase());
+  if (!canvas) {
+    canvas = { id: uuidv4(), projectId: proj.id, name: canvasName, createdAt: now, updatedAt: now } as Canvas;
+    await Repository.saveCanvas(canvas);
+  }
+  return canvas.id;
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Ingest a multi-sheet template workbook. The MASTER registry lists which
+ * sheets become tables (and their names); the MASTER connection sections
+ * declare table- and column-level lineage between those tables. The MASTER
+ * project section selects the project/canvas (created if missing).
+ * Returns the canvasId the data was imported into.
+ */
+export async function processExcelUpload(file: File, fallbackCanvasId: string | null): Promise<string> {
   const data = await file.arrayBuffer();
   const wb = XLSX.read(data);
 
-  // Parse TABLE_META
-  const wsTableMeta = wb.Sheets["TABLE_META"];
-  if (!wsTableMeta) throw new Error("Missing TABLE_META sheet");
-  const tableMetaRows: any[] = XLSX.utils.sheet_to_json(wsTableMeta, { header: 1 });
-  
-  const metaObj: Record<string, string> = {};
-  for (let i = 1; i < tableMetaRows.length; i++) {
-    const row = tableMetaRows[i];
-    if (row[0]) metaObj[row[0]] = row[1];
+  const masterWs = wb.Sheets['MASTER'];
+  if (!masterWs) throw new Error('Missing MASTER sheet — please use the downloaded template.');
+  const master = parseMaster(XLSX.utils.sheet_to_json<Row>(masterWs, { header: 1, blankrows: true }));
+
+  const canvasId = await resolveCanvas(master.project, fallbackCanvasId);
+
+  // Ingest exactly the tables named in the registry, and remember table_name -> datasetId.
+  const nameToDataset = new Map<string, string>();        // TABLE_NAME (upper) -> datasetId
+  for (const entry of master.registry) {
+    const tableName = upper(entry['table_name']);
+    if (!tableName) continue;                              // blank => skip this sheet
+    const sheetName = str(entry['sheet_name']);
+    if (RESERVED_SHEETS.has(sheetName)) continue;
+    const ws = wb.Sheets[sheetName];
+    if (!ws) throw new Error(`Registry lists sheet "${sheetName}" for table "${tableName}", but no such sheet exists.`);
+    const { meta, columns } = parseTableSheet(XLSX.utils.sheet_to_json<Row>(ws, { header: 1, blankrows: true }));
+    const datasetId = await upsertTable(canvasId, tableName, meta, columns);
+    nameToDataset.set(tableName, datasetId);
   }
 
-  const system = metaObj["system"]?.toUpperCase() as System;
-  const namespace = metaObj["namespace"]?.toUpperCase();
-  const tableName = metaObj["table_name"]?.toUpperCase();
+  const resolveRef = (ref: any): string | undefined => nameToDataset.get(upper(ref));
 
-  if (!system || !namespace || !tableName) {
-    throw new Error("TABLE_META must contain system, namespace, and table_name");
-  }
-  if (system !== 'LEGACY' && system !== 'TARGET') {
-    throw new Error("system must be LEGACY or TARGET");
-  }
+  const uploadId = uuidv4();
+  const processRecs: ProcessRec[] = [];
+  const tableEdges: TableEdge[] = [];
+  const columnEdges: ColumnEdge[] = [];
 
-  const datasetId = `${canvasId}::${system}:${namespace}.${tableName}`;
-
-  // Parse COLUMN_METADATA
-  const wsColMeta = wb.Sheets["COLUMN_METADATA"];
-  const colMetaRows: any[] = wsColMeta ? XLSX.utils.sheet_to_json(wsColMeta) : [];
-
-  // Reconcile with DB
-  await db.transaction('rw', [db.tableNodes, db.uploadRecs], async () => {
-    let existingNode = await db.tableNodes.get(datasetId);
-
-    const columns: ColumnDef[] = existingNode ? [...existingNode.columns] : [];
-
-    colMetaRows.forEach((row, idx) => {
-      const colName = row["column_name"]?.toUpperCase();
-      if (!colName) return;
-
-      const existingCol = columns.find(c => c.name === colName);
-
-      const num = (v: any) => (v === undefined || v === null || v === '' ? undefined : Number(v));
-      const bool = (v: any) => (v === undefined || v === null || v === '' ? undefined : String(v).toUpperCase() === 'TRUE');
-
-      const newColData: ColumnDef = {
-        name: colName,
-        dataType: row["data_type"] || existingCol?.dataType || 'UNKNOWN',
-        ordinal: existingCol?.ordinal || idx + 1,
-        origin: existingCol ? (existingCol.origin === 'LINEAGE' ? 'EXCEL' : existingCol.origin) : 'EXCEL',
-        metadata: {
-          ...existingCol?.metadata,
-          nullable: bool(row["nullable"]) ?? existingCol?.metadata?.nullable,
-          maxLength: num(row["max_length"]) ?? existingCol?.metadata?.maxLength,
-          precision: num(row["precision"]) ?? existingCol?.metadata?.precision,
-          defaultValue: row["default_value"] || existingCol?.metadata?.defaultValue,
-          columnDefinition: row["column_definition"] || existingCol?.metadata?.columnDefinition,
-          columnComputationFormula: row["column_computation_formula"] || existingCol?.metadata?.columnComputationFormula,
-        },
-        stats: {
-          ...existingCol?.stats,
-          nullCount: num(row["null_count"]) ?? existingCol?.stats?.nullCount,
-          minValue: row["min_value"] || existingCol?.stats?.minValue,
-          maxValue: row["max_value"] || existingCol?.stats?.maxValue,
-          uniqueCount: num(row["unique_count"]) ?? existingCol?.stats?.uniqueCount,
-          uniques: row["uniques"] || existingCol?.stats?.uniques,
-          meanValue: num(row["mean_value"]) ?? existingCol?.stats?.meanValue,
-          stddevValue: num(row["stddev_value"]) ?? existingCol?.stats?.stddevValue,
-          sumValue: num(row["sum_value"]) ?? existingCol?.stats?.sumValue,
-        },
-        lastEditedBy: "UPLOAD"
-      };
-
-      if (existingCol) {
-        const cIdx = columns.findIndex(c => c.name === colName);
-        columns[cIdx] = newColData;
-      } else {
-        columns.push(newColData);
-      }
+  // Table-to-table connections.
+  master.tableConnections.forEach((row, idx) => {
+    const from = resolveRef(row['from_table']);
+    const to = resolveRef(row['to_table']);
+    if (!from || !to) return;
+    const processId = `${canvasId}::${uuidv4()}`;
+    processRecs.push({
+      processId, canvasId, uploadId, sequence: idx + 1,
+      name: `${upper(row['from_table'])} → ${upper(row['to_table'])}`,
+      operationType: 'TABLE_LINEAGE',
+      sourceFile: file.name,
+      inputs: [from], outputs: [to],
+      description: str(row['description']) || undefined,
     });
-
-    const numMeta = (v: any) => (v === undefined || v === null || v === '' ? undefined : Number(v));
-    const boolMeta = (v: any) => (v === undefined || v === null || v === '' ? undefined : String(v).toUpperCase() === 'TRUE');
-    const tableMeta = {
-      description: metaObj["description"] || undefined,
-      environment: (metaObj["environment"]?.toUpperCase() as any) || undefined,
-      businessDomain: metaObj["business_domain"] || undefined,
-      rowCount: numMeta(metaObj["row_count"]),
-      columnCount: numMeta(metaObj["column_count"]) ?? columns.length,
-      hasPrimaryKey: boolMeta(metaObj["has_primary_key"]),
-      uniqueKeyColumns: metaObj["unique_key_columns"] || undefined,
-      grainDescription: metaObj["grain_description"] || undefined,
-      refreshFrequency: (metaObj["refresh_frequency"]?.toUpperCase() as any) || undefined,
-    };
-
-    if (existingNode) {
-      existingNode.columns = columns;
-      existingNode.origin = existingNode.origin === 'STUB' ? 'EXCEL' : existingNode.origin;
-      existingNode.metadata = {
-        ...existingNode.metadata,
-        ...Object.fromEntries(Object.entries(tableMeta).filter(([, v]) => v !== undefined)),
-      };
-      await db.tableNodes.put(existingNode);
-    } else {
-      const newNode: TableNode = {
-        datasetId,
-        canvasId,
-        system,
-        namespace,
-        name: tableName,
-        qualifiedName: `${namespace}.${tableName}`,
-        origin: 'EXCEL',
-        completeness: 'PARTIAL',
-        metadata: tableMeta,
-        columns,
-        referencedByUploadIds: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      await db.tableNodes.put(newNode);
-    }
-
-    await db.uploadRecs.put({
-      uploadId: crypto.randomUUID(),
-      canvasId,
-      kind: 'EXCEL',
-      fileName: file.name,
-      uploadedAt: new Date().toISOString(),
-      status: 'ACTIVE',
-      summary: {},
-      rawPayload: ''
-    });
+    tableEdges.push({ edgeId: `${canvasId}::${uuidv4()}`, canvasId, uploadId, fromDataset: from, toDataset: to, processId });
   });
+
+  // Column-to-column connections, grouped by target column.
+  const grouped = new Map<string, { target: { datasetId: string; column: string }; sources: { datasetId: string; column: string }[] }>();
+  for (const row of master.columnConnections) {
+    const targetDs = resolveRef(row['target_table']);
+    const targetCol = upper(row['target_column']);
+    const sourceDs = resolveRef(row['source_table']);
+    const sourceCol = upper(row['source_column']);
+    if (!targetDs || !targetCol) continue;
+    const k = `${targetDs}::${targetCol}`;
+    if (!grouped.has(k)) grouped.set(k, { target: { datasetId: targetDs, column: targetCol }, sources: [] });
+    if (sourceDs && sourceCol) grouped.get(k)!.sources.push({ datasetId: sourceDs, column: sourceCol });
+  }
+  let seq = master.tableConnections.length;
+  for (const g of grouped.values()) {
+    const processId = `${canvasId}::${uuidv4()}`;
+    processRecs.push({
+      processId, canvasId, uploadId, sequence: ++seq,
+      name: `${g.target.column} mapping`,
+      operationType: 'COLUMN_LINEAGE',
+      sourceFile: file.name,
+      inputs: g.sources.map(s => s.datasetId),
+      outputs: [g.target.datasetId],
+    });
+    columnEdges.push({
+      edgeId: `${canvasId}::${uuidv4()}`,
+      canvasId, uploadId,
+      target: g.target,
+      sources: g.sources,
+      processId,
+      transformationType: 'UNKNOWN',
+    });
+  }
+
+  await db.transaction('rw', [db.processRecs, db.tableEdges, db.columnEdges, db.uploadRecs], async () => {
+    if (processRecs.length) await db.processRecs.bulkPut(processRecs);
+    if (tableEdges.length) await db.tableEdges.bulkPut(tableEdges);
+    if (columnEdges.length) await db.columnEdges.bulkPut(columnEdges);
+
+    const uploadRec: UploadRec = {
+      uploadId, canvasId, kind: 'EXCEL', fileName: file.name,
+      uploadedAt: new Date().toISOString(), status: 'ACTIVE',
+      summary: {
+        datasets: nameToDataset.size,
+        tableEdges: tableEdges.length,
+        columnEdges: columnEdges.length,
+      },
+      rawPayload: '',
+    };
+    await db.uploadRecs.put(uploadRec);
+  });
+
+  return canvasId;
 }

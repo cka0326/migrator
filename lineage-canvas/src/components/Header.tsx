@@ -119,19 +119,29 @@ export function Header() {
       </div>
       <div className="flex items-center gap-2">
         <UploadsRegistry />
-        <Button variant="outline" onClick={async () => {
-           const { generateExcelTemplate } = await import('../lib/excelService');
-           await generateExcelTemplate();
+        <Button variant="outline" onClick={() => {
+           const a = document.createElement('a');
+           a.href = `${import.meta.env.BASE_URL}templates/Lineage_Canvas_Template.xlsx`;
+           a.download = 'Lineage_Canvas_Template.xlsx';
+           document.body.appendChild(a);
+           a.click();
+           a.remove();
         }}>Download Template</Button>
 
         <label className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">
           Upload Excel
-          <input type="file" className="hidden" accept=".xlsx" disabled={!activeCanvasId} onChange={async (e) => {
+          <input type="file" className="hidden" accept=".xlsx" onChange={async (e) => {
              const file = e.target.files?.[0];
-             if (file && activeCanvasId) {
-                const { processExcelUpload } = await import('../lib/excelService');
-                await processExcelUpload(file, activeCanvasId);
-                reloadActiveCanvas();
+             if (file) {
+                try {
+                  const { processExcelUpload } = await import('../lib/excelService');
+                  const targetCanvasId = await processExcelUpload(file, activeCanvasId);
+                  // The MASTER sheet may have created a new project/canvas.
+                  await useStore.getState().loadProjects();
+                  await useStore.getState().selectCanvas(targetCanvasId);
+                } catch (err) {
+                  alert(`Excel upload failed: ${err instanceof Error ? err.message : String(err)}`);
+                }
              }
              e.target.value = '';
           }} />
