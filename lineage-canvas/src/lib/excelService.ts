@@ -7,17 +7,15 @@ import {
   type ParsedColumn,
   type ParsedColumnConnection,
 } from './importModel';
+import { TABLE_META_KEYS as TABLE_META_KEY_LIST } from './excelSchema';
 
 // Sheets the importer never treats as a table.
 const RESERVED_SHEETS = new Set(['INSTRUCTIONS', 'MASTER']);
 // Table-level metadata keys on a table sheet. table_name lives in the MASTER
 // registry; the system (Legacy/Target) is chosen in the app's import validation
-// screen (one system per import), not on the sheet.
-const TABLE_META_KEYS = new Set([
-  'namespace', 'description', 'environment', 'business_domain',
-  'row_count', 'column_count', 'has_primary_key', 'unique_key_columns',
-  'grain_description', 'refresh_frequency',
-]);
+// screen (one system per import), not on the sheet. Key list is shared with the
+// writer (excelSchema.ts) so produced workbooks round-trip back through import.
+const TABLE_META_KEYS = new Set<string>(TABLE_META_KEY_LIST);
 
 type Row = any[];
 const cell = (r: Row | undefined, i: number) => (r ? r[i] : undefined);

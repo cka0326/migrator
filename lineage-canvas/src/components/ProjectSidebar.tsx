@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import {
-  FolderPlus, Plus, ChevronRight, ChevronLeft, ChevronDown, Trash2, GitCompare, Layers, Pencil, Copy,
+  FolderPlus, Plus, ChevronRight, ChevronLeft, ChevronDown, Trash2, GitCompare, Layers, Pencil, Copy, Share2, Upload,
 } from 'lucide-react';
 import type { Project } from '../types/models';
 
@@ -74,8 +74,23 @@ function ProjectItem({ project }: { project: Project }) {
   const setView = useStore(state => state.setView);
   const openComparison = useStore(state => state.openComparison);
   const deleteComparison = useStore(state => state.deleteComparison);
+  const exportProject = useStore(state => state.exportProject);
+  const exportComparison = useStore(state => state.exportComparison);
 
   const [expanded, setExpanded] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  const handleExportProject = async () => {
+    setBusy(true);
+    try { await exportProject(project.id); }
+    catch (e) { alert(`Export failed: ${e instanceof Error ? e.message : String(e)}`); }
+    finally { setBusy(false); }
+  };
+
+  const handleExportComparison = async (id: string) => {
+    try { await exportComparison(id); }
+    catch (e) { alert(`Export failed: ${e instanceof Error ? e.message : String(e)}`); }
+  };
 
   const projectCanvases = Object.values(canvases)
     .filter(c => c.projectId === project.id)
@@ -124,6 +139,9 @@ function ProjectItem({ project }: { project: Project }) {
           </button>
           <button title="Duplicate project" onClick={handleCloneProject} className="p-1 text-slate-400 hover:text-primary">
             <Copy size={13} />
+          </button>
+          <button title="Share / export project (.zip)" onClick={handleExportProject} disabled={busy} className="p-1 text-slate-400 hover:text-primary disabled:opacity-50">
+            <Share2 size={13} />
           </button>
           <button
             title="Rename project"
@@ -219,6 +237,13 @@ function ProjectItem({ project }: { project: Project }) {
                     <GitCompare size={12} className="shrink-0 opacity-70" />
                     <span className="flex-1 truncate">{cmp.name}</span>
                     <button
+                      title="Share / export comparison (.zip)"
+                      onClick={(e) => { e.stopPropagation(); handleExportComparison(cmp.id); }}
+                      className="p-0.5 text-slate-400 hover:text-primary opacity-0 group-hover/cmp:opacity-100"
+                    >
+                      <Share2 size={11} />
+                    </button>
+                    <button
                       title="Delete comparison"
                       onClick={(e) => { e.stopPropagation(); if (confirm(`Delete comparison "${cmp.name}"?`)) deleteComparison(cmp.id); }}
                       className="p-0.5 text-slate-400 hover:text-red-600 opacity-0 group-hover/cmp:opacity-100"
@@ -246,7 +271,20 @@ const DEFAULT_WIDTH = 256;
 
 export function ProjectSidebar() {
   const projects = useStore(state => state.projects);
+  const importProject = useStore(state => state.importProject);
+  const importComparison = useStore(state => state.importComparison);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const projectFileRef = useRef<HTMLInputElement>(null);
+  const comparisonFileRef = useRef<HTMLInputElement>(null);
+
+  const runImport = async (file: File | undefined, fn: (f: File) => Promise<void>, kind: string) => {
+    if (!file) return;
+    setImporting(true);
+    try { await fn(file); }
+    catch (e) { alert(`${kind} import failed: ${e instanceof Error ? e.message : String(e)}`); }
+    finally { setImporting(false); }
+  };
 
   // Collapsed + width are user preferences, persisted across reloads.
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar:collapsed') === '1');
@@ -303,10 +341,20 @@ export function ProjectSidebar() {
           <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setNewProjectOpen(true)}>
             <FolderPlus size={14} className="mr-1" /> New
           </Button>
+          <button title="Import project bundle (.zip)" disabled={importing} onClick={() => projectFileRef.current?.click()} className="p-1 text-slate-400 hover:text-primary disabled:opacity-50">
+            <Upload size={15} />
+          </button>
+          <button title="Import comparison bundle (.zip)" disabled={importing} onClick={() => comparisonFileRef.current?.click()} className="p-1 text-slate-400 hover:text-primary disabled:opacity-50">
+            <GitCompare size={15} />
+          </button>
           <button title="Collapse sidebar" onClick={() => setCollapsed(true)} className="p-1 text-slate-400 hover:text-slate-700">
             <ChevronLeft size={16} />
           </button>
         </div>
+        <input ref={projectFileRef} type="file" accept=".zip" className="hidden"
+          onChange={e => { runImport(e.target.files?.[0], importProject, 'Project'); e.target.value = ''; }} />
+        <input ref={comparisonFileRef} type="file" accept=".zip" className="hidden"
+          onChange={e => { runImport(e.target.files?.[0], importComparison, 'Comparison'); e.target.value = ''; }} />
       </div>
 
       <div className="flex-1 overflow-y-auto p-2">

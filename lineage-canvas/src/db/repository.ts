@@ -8,6 +8,14 @@ export const Repository = {
     return db.projects.toArray();
   },
 
+  async getProject(projectId: string) {
+    return db.projects.get(projectId);
+  },
+
+  async getComparison(id: string) {
+    return db.comparisons.get(id);
+  },
+
   async saveProject(project: Project) {
     await db.projects.put(project);
   },
@@ -47,6 +55,10 @@ export const Repository = {
     return db.canvases.toArray();
   },
 
+  async getCanvas(canvasId: string) {
+    return db.canvases.get(canvasId);
+  },
+
   async saveCanvas(canvas: Canvas) {
     await db.canvases.put(canvas);
   },
@@ -75,6 +87,14 @@ export const Repository = {
 
   async getColumnEdgesByCanvas(canvasId: string) {
     return db.columnEdges.where('canvasId').equals(canvasId).toArray();
+  },
+
+  async getProcessRecsByCanvas(canvasId: string) {
+    return db.processRecs.where('canvasId').equals(canvasId).toArray();
+  },
+
+  async getUploadsByCanvas(canvasId: string) {
+    return db.uploadRecs.where('canvasId').equals(canvasId).toArray();
   },
 
   // Deep-copy every row owned by oldCanvasId into newCanvasId, remapping all
@@ -269,6 +289,61 @@ export const Repository = {
         if (data.columnEdges?.length) await db.columnEdges.bulkAdd(data.columnEdges);
         if (data.uploadRecs?.length) await db.uploadRecs.bulkAdd(data.uploadRecs);
         if (data.editEvents?.length) await db.editEvents.bulkAdd(data.editEvents);
+      });
+  },
+
+  // ---------- Bundle import (additive — never clears existing data) ----------
+  // A project bundle arrives with freshly-remapped ids, so a straight bulkPut is safe.
+  async saveImportedProjectBundle(g: {
+    project: Project;
+    canvases: Canvas[];
+    comparisons: SavedComparison[];
+    tableNodes: any[];
+    tableEdges: any[];
+    columnEdges: any[];
+    processRecs: any[];
+    uploadRecs: any[];
+  }) {
+    await db.transaction('rw',
+      [db.projects, db.canvases, db.comparisons, db.tableNodes, db.tableEdges, db.columnEdges, db.processRecs, db.uploadRecs],
+      async () => {
+        await db.projects.put(g.project);
+        if (g.canvases.length) await db.canvases.bulkPut(g.canvases);
+        if (g.comparisons.length) await db.comparisons.bulkPut(g.comparisons);
+        if (g.tableNodes.length) await db.tableNodes.bulkPut(g.tableNodes);
+        if (g.tableEdges.length) await db.tableEdges.bulkPut(g.tableEdges);
+        if (g.columnEdges.length) await db.columnEdges.bulkPut(g.columnEdges);
+        if (g.processRecs.length) await db.processRecs.bulkPut(g.processRecs);
+        if (g.uploadRecs.length) await db.uploadRecs.bulkPut(g.uploadRecs);
+      });
+  },
+
+  // A comparison bundle keeps original ids: insert any referenced projects/canvases/
+  // tables that are MISSING locally (so we never clobber the recipient's edits), then
+  // add the comparison record itself.
+  async saveImportedComparison(g: {
+    comparison: SavedComparison;
+    projects: Project[];
+    canvases: Canvas[];
+    tableNodes: any[];
+    tableEdges: any[];
+    columnEdges: any[];
+  }) {
+    const addMissing = async (table: any, rows: any[], key: string) => {
+      if (!rows.length) return;
+      const found = await table.bulkGet(rows.map(r => r[key]));
+      const toAdd = rows.filter((_, i) => !found[i]);
+      if (toAdd.length) await table.bulkPut(toAdd);
+    };
+    await db.transaction('rw',
+      [db.projects, db.canvases, db.comparisons, db.tableNodes, db.tableEdges, db.columnEdges],
+      async () => {
+        await addMissing(db.projects, g.projects, 'id');
+        await addMissing(db.canvases, g.canvases, 'id');
+        await addMissing(db.tableNodes, g.tableNodes, 'datasetId');
+        await addMissing(db.tableEdges, g.tableEdges, 'edgeId');
+        await addMissing(db.columnEdges, g.columnEdges, 'edgeId');
+        await db.comparisons.put(g.comparison);
       });
   },
 
