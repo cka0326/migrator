@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useStore } from '../store/useStore';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import {
-  FolderPlus, Plus, ChevronRight, ChevronDown, Trash2, GitCompare, Layers, Pencil, Copy,
+  FolderPlus, Plus, ChevronRight, ChevronLeft, ChevronDown, Trash2, GitCompare, Layers, Pencil, Copy,
 } from 'lucide-react';
 import type { Project } from '../types/models';
 
@@ -240,19 +240,73 @@ function ProjectItem({ project }: { project: Project }) {
   );
 }
 
+const MIN_WIDTH = 200;
+const MAX_WIDTH = 500;
+const DEFAULT_WIDTH = 256;
+
 export function ProjectSidebar() {
   const projects = useStore(state => state.projects);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
 
+  // Collapsed + width are user preferences, persisted across reloads.
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar:collapsed') === '1');
+  const [width, setWidth] = useState(() => {
+    const saved = Number(localStorage.getItem('sidebar:width'));
+    return saved >= MIN_WIDTH && saved <= MAX_WIDTH ? saved : DEFAULT_WIDTH;
+  });
+  const asideRef = useRef<HTMLElement>(null);
+
+  useEffect(() => { localStorage.setItem('sidebar:collapsed', collapsed ? '1' : '0'); }, [collapsed]);
+  useEffect(() => { localStorage.setItem('sidebar:width', String(width)); }, [width]);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const left = asideRef.current?.getBoundingClientRect().left ?? 0;
+    const onMove = (ev: MouseEvent) => {
+      setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, ev.clientX - left)));
+    };
+    const onUp = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, []);
+
   const projectList = Object.values(projects).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
+  // Collapsed: a slim rail with controls to reopen.
+  if (collapsed) {
+    return (
+      <aside className="w-10 shrink-0 h-full border-r bg-white flex flex-col items-center py-3 gap-3">
+        <button title="Expand sidebar" onClick={() => setCollapsed(false)} className="text-slate-500 hover:text-slate-800">
+          <ChevronRight size={18} />
+        </button>
+        <button title="New project" onClick={() => { setCollapsed(false); setNewProjectOpen(true); }} className="text-slate-500 hover:text-primary">
+          <FolderPlus size={16} />
+        </button>
+        <span className="text-[10px] font-semibold tracking-wider text-slate-400 [writing-mode:vertical-rl] mt-1">PROJECTS</span>
+        <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} />
+      </aside>
+    );
+  }
+
   return (
-    <aside className="w-64 shrink-0 h-full border-r bg-white flex flex-col">
+    <aside ref={asideRef} style={{ width }} className="relative shrink-0 h-full border-r bg-white flex flex-col">
       <div className="flex items-center justify-between px-3 py-3 border-b">
         <h2 className="text-sm font-semibold tracking-tight text-slate-700">Projects</h2>
-        <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setNewProjectOpen(true)}>
-          <FolderPlus size={14} className="mr-1" /> New
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setNewProjectOpen(true)}>
+            <FolderPlus size={14} className="mr-1" /> New
+          </Button>
+          <button title="Collapse sidebar" onClick={() => setCollapsed(true)} className="p-1 text-slate-400 hover:text-slate-700">
+            <ChevronLeft size={16} />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2">
@@ -266,6 +320,13 @@ export function ProjectSidebar() {
       </div>
 
       <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} />
+
+      {/* Drag handle to resize the sidebar */}
+      <div
+        onMouseDown={startResize}
+        title="Drag to resize"
+        className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/40 transition-colors"
+      />
     </aside>
   );
 }
