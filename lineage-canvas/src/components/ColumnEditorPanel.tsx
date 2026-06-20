@@ -11,9 +11,15 @@ export function ColumnEditorPanel() {
   const selectColumn = useStore(state => state.selectColumn);
   const nodes = useStore(state => state.nodes);
   const updateColumn = useStore(state => state.updateColumn);
+  const renameColumn = useStore(state => state.renameColumn);
 
   const node = selectedColumn ? nodes[selectedColumn.datasetId] : null;
   const column = node?.columns.find(c => c.name === selectedColumn?.columnName);
+
+  // Editable column name. Renaming re-points column edges, so it's applied via
+  // its own action before the rest of the metadata is saved.
+  const [colName, setColName] = useState('');
+  const [nameError, setNameError] = useState<string | null>(null);
 
   // Metadata fields
   const [dataType, setDataType] = useState('');
@@ -39,6 +45,8 @@ export function ColumnEditorPanel() {
 
   useEffect(() => {
     if (column) {
+      setColName(column.name);
+      setNameError(null);
       setDataType(column.dataType || '');
       setNullable(column.metadata?.nullable === undefined ? 'UNASSIGNED' : String(column.metadata.nullable));
       setMaxLength(column.metadata?.maxLength !== undefined ? String(column.metadata.maxLength) : '');

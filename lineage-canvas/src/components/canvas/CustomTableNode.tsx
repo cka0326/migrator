@@ -6,7 +6,7 @@ import { Badge } from '../ui/badge';
 import { ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 
-export function CustomTableNode({ data, id }: NodeProps<any>) {
+export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
   const selectNode = useStore(state => state.selectNode);
   const toggleNodeCollapse = useStore(state => state.toggleNodeCollapse);
   const project = useStore(state => state.activeProjectId ? state.projects[state.activeProjectId] : null);
@@ -70,16 +70,25 @@ export function CustomTableNode({ data, id }: NodeProps<any>) {
     else focusClasses = 'opacity-40';
   }
 
+  // Selection styling (outside focus mode): make multi-selected tables — e.g. the
+  // ones queued for a merge — clearly stand out from unselected cards.
+  const selectedClasses = !isFocusMode && selected ? 'ring-2 ring-primary border-primary shadow-md' : '';
+
   return (
     <div
-      className={`bg-card border-2 rounded-lg shadow-sm w-[280px] text-left overflow-visible transition-shadow duration-150 hover:shadow-md ${origin === 'STUB' ? 'border-dashed border-orange-300' : 'border-slate-300'} ${focusClasses}`}
+      className={`bg-card border-2 rounded-lg shadow-sm w-[280px] text-left overflow-visible transition-shadow duration-150 hover:shadow-md ${origin === 'STUB' ? 'border-dashed border-orange-300' : 'border-slate-300'} ${focusClasses} ${selectedClasses}`}
     >
       {/* Table-level Handles */}
       <Handle type="target" position={Position.Left} id="table-target" className="w-3 h-3 bg-slate-400 cursor-crosshair" />
       <Handle type="source" position={Position.Right} id="table-source" className="w-3 h-3 bg-slate-400 cursor-crosshair" />
 
-      {/* Header — clicking here (and only here) opens the details panel */}
-      <div className="p-2 border-b bg-muted/50 rounded-t-md cursor-pointer flex flex-col gap-1" onClick={() => selectNode(id)}>
+      {/* Header — a plain click opens the details panel; a modified click
+          (Ctrl/Cmd/Shift) is a multi-select gesture for React Flow, so we leave
+          it to add the node to the selection without opening the panel. */}
+      <div
+        className="p-2 border-b bg-muted/50 rounded-t-md cursor-pointer flex flex-col gap-1"
+        onClick={(e) => { if (e.ctrlKey || e.metaKey || e.shiftKey) return; selectNode(id); }}
+      >
         <div className="flex justify-between items-start">
           <div className="flex flex-col min-w-0">
             <span className="text-xs text-muted-foreground">{namespace}</span>

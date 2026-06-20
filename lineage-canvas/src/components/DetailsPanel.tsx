@@ -14,6 +14,7 @@ export function DetailsPanel() {
   const selectNode = useStore(state => state.selectNode);
   const nodes = useStore(state => state.nodes);
   const updateTableMetadata = useStore(state => state.updateTableMetadata);
+  const renameTable = useStore(state => state.renameTable);
   const deleteTableNode = useStore(state => state.deleteTableNode);
   const project = useStore(state => state.activeProjectId ? state.projects[state.activeProjectId] : null);
 
@@ -23,14 +24,30 @@ export function DetailsPanel() {
     : '';
 
   const [meta, setMeta] = useState<TableMetadata | null>(null);
+  // Editable identity (namespace / table name). Renaming changes the datasetId
+  // and re-points all edges, so it's applied via its own action.
+  const [ns, setNs] = useState('');
+  const [nm, setNm] = useState('');
+  const [identityError, setIdentityError] = useState<string | null>(null);
   // Shows the "Save successful" confirmation; cleared whenever a field changes.
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (node) {
       setMeta(node.metadata);
+      setNs(node.namespace);
+      setNm(node.name);
+      setIdentityError(null);
     }
   }, [node]);
+
+  const identityDirty = !!node && (ns !== node.namespace || nm !== node.name);
+
+  const handleRename = async () => {
+    if (!node) return;
+    const err = await renameTable(node.datasetId, ns, nm);
+    setIdentityError(err);
+  };
 
   // Clear the confirmation as soon as the user edits a field. Compared by value
   // (not reference) so the post-save store refresh — which re-applies identical
@@ -99,12 +116,32 @@ export function DetailsPanel() {
               </tr>
               <tr className="border-b border-border/60">
                 <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] w-[130px] border-r border-border/60">Namespace</td>
-                <td className="px-2 py-1 font-mono text-[11px] text-foreground break-all">{node.namespace}</td>
+                <td className="px-2 py-1">
+                  <Input value={ns} onChange={e => { setNs(e.target.value.toUpperCase()); setIdentityError(null); }} className="h-6 text-xs border-border font-mono rounded-md" />
+                </td>
               </tr>
               <tr className="border-b border-border/60">
                 <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Table Name</td>
-                <td className="px-2 py-1 font-mono text-[11px] text-foreground break-all">{node.name}</td>
+                <td className="px-2 py-1">
+                  <Input value={nm} onChange={e => { setNm(e.target.value.toUpperCase()); setIdentityError(null); }} className="h-6 text-xs border-border font-mono rounded-md" />
+                </td>
               </tr>
+              {(identityDirty || identityError) && (
+                <tr className="border-b border-border/60">
+                  <td className="px-2 py-1 bg-muted/40 border-r border-border/60" />
+                  <td className="px-2 py-1.5">
+                    {identityError && <div className="text-[10px] font-mono text-destructive mb-1.5">{identityError}</div>}
+                    <div className="flex items-center gap-2">
+                      <Button onClick={handleRename} disabled={!identityDirty} className="h-6 px-3 bg-primary hover:bg-primary/90 text-primary-foreground font-mono text-[10px] rounded-md">
+                        Rename table
+                      </Button>
+                      <Button onClick={() => { setNs(node.namespace); setNm(node.name); setIdentityError(null); }} className="h-6 px-3 bg-transparent hover:bg-muted text-muted-foreground border border-border font-mono text-[10px] rounded-md">
+                        Reset
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              )}
 
               <tr className="bg-muted/60">
                 <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-border border-t border-border">
