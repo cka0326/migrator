@@ -11,14 +11,14 @@ src/lib/excelService.ts and parses exactly the structure produced below.
 Structure
 ---------
 - INSTRUCTIONS / MASTER are reserved (never imported as tables).
-- MASTER has four sections: PROJECT, TABLE REGISTRY, TABLE CONNECTIONS,
-  COLUMN CONNECTIONS.
+- MASTER has three sections: TABLE REGISTRY, TABLE CONNECTIONS, COLUMN CONNECTIONS.
 - The TABLE REGISTRY maps each fixed sheet (TABLE_1..TABLE_15) to a table_name.
   ONLY registry rows that have a table_name are imported (max 15 tables).
 - Connection sections reference tables via dropdowns sourced from the registry's
   table_name column, so they can only point at registered tables.
-- Each TABLE_n sheet holds table-level metadata (system, namespace, ...) and a
-  column grid. The table's NAME comes from the registry, not the sheet.
+- Each TABLE_n sheet holds table-level metadata (namespace, ...) and a column grid.
+  The table's NAME comes from the registry, not the sheet. The project, canvas and
+  system (Legacy/Target) are chosen in the app's import screen — one system per import.
 
 Regenerate after changing the structure:
 
@@ -42,15 +42,13 @@ MAX_TABLES = 15
 # "UNASSIGNED" is the app's sentinel for "no value" (see DetailsPanel.tsx); the
 # importer maps it back to undefined.
 # ---------------------------------------------------------------------------
-SYSTEMS = ["LEGACY", "TARGET"]
 ENVIRONMENTS = ["UNASSIGNED", "DEV", "TEST", "UAT", "PROD"]
 BOOLEANS = ["TRUE", "FALSE"]
 REFRESH = ["UNASSIGNED", "DAILY", "WEEKLY", "MONTHLY", "AD_HOC"]
 
-# Ordered table-level metadata fields: (key, note). table_name is intentionally
-# absent — it is declared in the MASTER registry.
+# Ordered table-level metadata fields: (key, note). table_name is declared in the
+# MASTER registry; system (Legacy/Target) is chosen in the app at import time.
 TABLE_META_FIELDS = [
-    ("system", "LEGACY or TARGET (dropdown) — which side of the migration this table lives on"),
     ("namespace", "SAS library or DATABASE.SCHEMA"),
     ("description", "What the table holds"),
     ("environment", "UNASSIGNED / DEV / TEST / UAT / PROD (dropdown)"),
@@ -147,14 +145,17 @@ def build_instructions(wb):
         ("How it works", SECTION_FONT),
         (f"1. There are {MAX_TABLES} fixed table sheets: TABLE_1 .. TABLE_{MAX_TABLES}. Fill one per table you want to ingest (max {MAX_TABLES}).", None),
         ("2. In MASTER, the TABLE REGISTRY assigns a table_name to each sheet you use. ONLY sheets given a table_name there are imported.", None),
-        ("3. On each TABLE_n sheet, fill the TABLE METADATA block (system, namespace, ...) and list the columns in the grid below.", None),
-        ("   The table's NAME is taken from the registry, so it is not repeated on the sheet — but system and namespace ARE set on the sheet.", None),
+        ("3. On each TABLE_n sheet, fill the TABLE METADATA block (namespace, description, ...) and list the columns in the grid below.", None),
+        ("   The table's NAME is taken from the registry, so it is not repeated on the sheet. The system (Legacy/Target) is chosen in the app at import time.", None),
         ("4. Cells with a dropdown arrow are restricted to the allowed values. data_type is free text — type any type name.", None),
         ("5. Declare lineage in MASTER: TABLE CONNECTIONS (table→table) and COLUMN CONNECTIONS (column→column). Tables are picked from the registry.", None),
-        ("6. Save and upload with the 'Upload Excel' button in the app.", None),
+        ("6. Save and upload with the 'Upload Excel' button in the app, then pick the project, canvas and system (Legacy/Target) on the import screen.", None),
+        ("", None),
+        ("Project / canvas / system", SECTION_FONT),
+        ("- You choose the target project, canvas and system (Legacy or Target) in the app's import screen — they are NOT in this workbook.", None),
+        ("- A single workbook imports into ONE system. Use a separate import for the other system.", None),
         ("", None),
         ("The MASTER sheet", SECTION_FONT),
-        ("- PROJECT: the project & canvas to import into. They are CREATED IF THEY DO NOT EXIST. Leave project_name blank to import into the open canvas.", None),
         ("- TABLE REGISTRY: sheet_name (pre-filled, do not edit) -> table_name (you fill). Leave table_name blank for sheets you are not using.", None),
         ("- TABLE CONNECTIONS: from_table -> to_table. Pick both from the registry dropdown; optionally add a description.", None),
         ("- COLUMN CONNECTIONS: target column <- source column. Pick the tables from the dropdown and type the column names. Repeat the target to add more sources.", None),
@@ -178,7 +179,7 @@ def build_master(wb):
     ws.sheet_properties.tabColor = "047857"
     ws.sheet_view.showGridLines = False
 
-    ws.cell(row=1, column=1, value="MASTER — Project, table registry & lineage connections").font = TITLE_FONT
+    ws.cell(row=1, column=1, value="MASTER — table registry & lineage connections").font = TITLE_FONT
 
     def section_title(r, text):
         ws.cell(row=r, column=1, value=text).font = SECTION_FONT
@@ -195,25 +196,14 @@ def build_master(wb):
                 cell.fill = fill
                 cell.border = BORDER
 
-    # ---- 1) PROJECT --------------------------------------------------------
-    section_title(3, "1) PROJECT — tables below are imported here; the project & canvas are created if they do not exist")
-    header(4, ["Field", "Value", "Notes"])
-    project_rows = [
-        ("project_name", "Project to import into. Leave blank to use the canvas currently open in the app."),
-        ("legacy_system_name", "Label for the source/legacy system, e.g. SAS (used only when CREATING a new project)."),
-        ("target_system_name", "Label for the target system, e.g. Snowflake (used only when CREATING a new project)."),
-        ("canvas_name", "Snapshot/canvas to import into, e.g. As-Is. Defaults to 'Imported' when blank."),
-    ]
-    r = 5
-    for key, note in project_rows:
-        kc = ws.cell(row=r, column=1, value=key); kc.font = KEY_FONT; kc.fill = KEY_FILL; kc.border = BORDER
-        vc = ws.cell(row=r, column=2); vc.fill = INPUT_FILL; vc.border = BORDER
-        ws.cell(row=r, column=3, value=note).font = NOTE_FONT
-        r += 1
+    # The project, canvas and system (Legacy/Target) are chosen in the app's
+    # import validation screen — not in this workbook. One system per import.
+    ws.cell(row=2, column=1,
+            value="Project, canvas and system (Legacy/Target) are chosen in the app when you import. One system per import.").font = NOTE_FONT
 
-    # ---- 2) TABLE REGISTRY -------------------------------------------------
-    reg_title = r + 1
-    section_title(reg_title, f"2) TABLE REGISTRY — name each sheet you use. Only rows with a table_name are imported (max {MAX_TABLES}).")
+    # ---- 1) TABLE REGISTRY -------------------------------------------------
+    reg_title = 4
+    section_title(reg_title, f"1) TABLE REGISTRY — name each sheet you use. Only rows with a table_name are imported (max {MAX_TABLES}).")
     reg_header = reg_title + 1
     header(reg_header, ["sheet_name", "table_name", "Notes"])
     reg_first = reg_header + 1
@@ -229,7 +219,7 @@ def build_master(wb):
 
     # ---- 3) TABLE CONNECTIONS ---------------------------------------------
     tc_title = reg_last + 2
-    section_title(tc_title, "3) TABLE CONNECTIONS — table-to-table lineage; one row per edge. Pick tables from the registry.")
+    section_title(tc_title, "2) TABLE CONNECTIONS — table-to-table lineage; one row per edge. Pick tables from the registry.")
     tc_header = tc_title + 1
     header(tc_header, ["from_table", "to_table", "description"])
     tc_first = tc_header + 1
@@ -240,7 +230,7 @@ def build_master(wb):
 
     # ---- 4) COLUMN CONNECTIONS --------------------------------------------
     cc_title = tc_last + 2
-    section_title(cc_title, "4) COLUMN CONNECTIONS — column-to-column lineage; one row per source→target mapping. Repeat the target to add more sources.")
+    section_title(cc_title, "3) COLUMN CONNECTIONS — column-to-column lineage; one row per source→target mapping. Repeat the target to add more sources.")
     cc_header = cc_title + 1
     header(cc_header, ["target_table", "target_column", "source_table", "source_column"])
     cc_first = cc_header + 1
@@ -283,7 +273,6 @@ def build_table_sheet(wb, name, example=None, title=None):
             vc.font = EXAMPLE_FONT
         ws.cell(row=r, column=3, value=note).font = NOTE_FONT
 
-    dv_system = list_dv(SYSTEMS); ws.add_data_validation(dv_system); dv_system.add(f"B{row_index['system']}")
     dv_env = list_dv(ENVIRONMENTS); ws.add_data_validation(dv_env); dv_env.add(f"B{row_index['environment']}")
     dv_pk = list_dv(BOOLEANS); ws.add_data_validation(dv_pk); dv_pk.add(f"B{row_index['has_primary_key']}")
     dv_refresh = list_dv(REFRESH); ws.add_data_validation(dv_refresh); dv_refresh.add(f"B{row_index['refresh_frequency']}")
@@ -321,7 +310,6 @@ def build_table_sheet(wb, name, example=None, title=None):
 
 EXAMPLE_CUSTOMERS = {
     "meta": {
-        "system": "TARGET",
         "namespace": "ANALYTICS.CORE",
         "description": "One row per customer (cleansed master record).",
         "environment": "PROD",

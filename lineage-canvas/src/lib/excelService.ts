@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { System, TableMetadata, ColumnMetadata, ColumnStat } from '../types/models';
+import type { TableMetadata, ColumnMetadata, ColumnStat } from '../types/models';
 import {
   DEFAULT_NAMESPACE,
   type ParsedImportModel,
@@ -10,9 +10,11 @@ import {
 
 // Sheets the importer never treats as a table.
 const RESERVED_SHEETS = new Set(['INSTRUCTIONS', 'MASTER']);
-// Table-level metadata keys on a table sheet. table_name lives in the MASTER registry.
+// Table-level metadata keys on a table sheet. table_name lives in the MASTER
+// registry; the system (Legacy/Target) is chosen in the app's import validation
+// screen (one system per import), not on the sheet.
 const TABLE_META_KEYS = new Set([
-  'system', 'namespace', 'description', 'environment', 'business_domain',
+  'namespace', 'description', 'environment', 'business_domain',
   'row_count', 'column_count', 'has_primary_key', 'unique_key_columns',
   'grain_description', 'refresh_frequency',
 ]);
@@ -71,19 +73,12 @@ function readSection(rows: Row[], headerKey: string, endIdx: number) {
 }
 
 function parseMaster(rows: Row[]) {
-  const project: Record<string, any> = {};
-  for (const row of rows) {
-    const key = str(cell(row, 0));
-    if (['project_name', 'legacy_system_name', 'target_system_name', 'canvas_name'].includes(key)) {
-      project[key] = cell(row, 1);
-    }
-  }
   const tcIdx = rows.findIndex(r => str(cell(r, 0)) === 'from_table');
   const ccIdx = rows.findIndex(r => str(cell(r, 0)) === 'target_table');
   const registry = readSection(rows, 'sheet_name', tcIdx);
   const tableConnections = readSection(rows, 'from_table', ccIdx === -1 ? -1 : ccIdx);
   const columnConnections = readSection(rows, 'target_table', -1);
-  return { project, registry, tableConnections, columnConnections };
+  return { registry, tableConnections, columnConnections };
 }
 
 function buildTableMeta(meta: Record<string, any>): Partial<TableMetadata> {
@@ -153,14 +148,13 @@ export async function parseExcelWorkbook(file: File): Promise<{ model: ParsedImp
     if (!ws) throw new Error(`Registry lists sheet "${sheetName}" for table "${tableName}", but no such sheet exists.`);
 
     const { meta, columns } = parseTableSheet(XLSX.utils.sheet_to_json<Row>(ws, { header: 1, blankrows: true }));
-    const sys = upper(meta['system']);
-    const system: System | undefined = sys === 'LEGACY' || sys === 'TARGET' ? sys : undefined;
     const namespace = upper(meta['namespace']) || DEFAULT_NAMESPACE;
 
+    // No per-table system — the import targets a single system chosen in the
+    // validation screen (ParsedTable.system left undefined → uses target default).
     tables.push({
       name: tableName,
       namespace,
-      system,
       columns: columns.map(buildColumn).filter((c): c is ParsedColumn => c !== null),
       metadata: buildTableMeta(meta),
     });
@@ -193,12 +187,6 @@ export async function parseExcelWorkbook(file: File): Promise<{ model: ParsedImp
     tables,
     tableConnections,
     columnConnections,
-    projectHint: {
-      name: str(master.project['project_name']) || undefined,
-      legacySystemName: str(master.project['legacy_system_name']) || undefined,
-      targetSystemName: str(master.project['target_system_name']) || undefined,
-    },
-    canvasHint: str(master.project['canvas_name']) || undefined,
   };
 
   return { model, warnings };

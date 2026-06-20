@@ -129,7 +129,9 @@ export function ImportValidationDialog({ open, onOpenChange, source, model, rawP
             <div className="min-w-0">
               <Label className="text-[11px] text-muted-foreground">Project</Label>
               <Select value={projectId} onValueChange={setProjectId}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Project" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-full min-w-0">
+                  <SelectValue placeholder="Project">{(v: string) => projects[v]?.name ?? 'Project'}</SelectValue>
+                </SelectTrigger>
                 <SelectContent>
                   {Object.values(projects).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                 </SelectContent>
@@ -138,7 +140,9 @@ export function ImportValidationDialog({ open, onOpenChange, source, model, rawP
             <div className="min-w-0">
               <Label className="text-[11px] text-muted-foreground">Canvas</Label>
               <Select value={canvasId} onValueChange={setCanvasId} disabled={!projectId}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Canvas" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-full min-w-0">
+                  <SelectValue placeholder="Canvas">{(v: string) => canvases[v]?.name ?? 'Canvas'}</SelectValue>
+                </SelectTrigger>
                 <SelectContent>
                   {projectCanvases.length === 0 && <SelectItem value="__none" disabled>No canvases</SelectItem>}
                   {projectCanvases.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
@@ -148,7 +152,9 @@ export function ImportValidationDialog({ open, onOpenChange, source, model, rawP
             <div className="min-w-0">
               <Label className="text-[11px] text-muted-foreground">System {source === 'EXCEL' && '(default)'}</Label>
               <Select value={system} onValueChange={(v) => setSystem(v as System)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-full min-w-0">
+                  <SelectValue>{(v: string) => (v === 'LEGACY' ? 'Legacy' : 'Target')}</SelectValue>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="LEGACY">Legacy</SelectItem>
                   <SelectItem value="TARGET">Target</SelectItem>
@@ -169,7 +175,9 @@ export function ImportValidationDialog({ open, onOpenChange, source, model, rawP
             <div>
               <Label className="text-[11px] text-muted-foreground">How to apply to existing tables</Label>
               <Select value={mode} onValueChange={(v) => setMode(v as ImportMode)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-full min-w-0">
+                  <SelectValue>{(v: string) => v === 'additive' ? 'Additive — add only' : v === 'override-metadata' ? 'Override metadata' : 'Override metadata + connections'}</SelectValue>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="additive">Additive — add tables/columns/connections only</SelectItem>
                   <SelectItem value="override-metadata">Override metadata — also overwrite table/column metadata</SelectItem>
@@ -215,7 +223,7 @@ export function ImportValidationDialog({ open, onOpenChange, source, model, rawP
                         <Field label="Business Domain"><Input className="h-7 text-xs" value={m.businessDomain || ''} onChange={(e) => updateMeta(i, { businessDomain: e.target.value || undefined })} /></Field>
                         <Field label="Environment">
                           <Select value={m.environment || 'UNASSIGNED'} onValueChange={(v) => updateMeta(i, { environment: v === 'UNASSIGNED' ? undefined : v as any })}>
-                            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-7 text-xs w-full min-w-0"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {['UNASSIGNED', 'DEV', 'TEST', 'UAT', 'PROD'].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
                             </SelectContent>
@@ -223,7 +231,7 @@ export function ImportValidationDialog({ open, onOpenChange, source, model, rawP
                         </Field>
                         <Field label="Refresh Frequency">
                           <Select value={m.refreshFrequency || 'UNASSIGNED'} onValueChange={(v) => updateMeta(i, { refreshFrequency: v === 'UNASSIGNED' ? undefined : v as any })}>
-                            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-7 text-xs w-full min-w-0"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {['UNASSIGNED', 'DAILY', 'WEEKLY', 'MONTHLY', 'AD_HOC'].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
                             </SelectContent>
