@@ -69,13 +69,21 @@ export function ColumnEditorPanel() {
   // Clear the confirmation as soon as the user changes any field. The post-save
   // store refresh re-applies identical values, so this key is unchanged then.
   const formKey = [
-    dataType, nullable, maxLength, precision, defaultValue, columnDefinition, columnComputationFormula,
+    colName, dataType, nullable, maxLength, precision, defaultValue, columnDefinition, columnComputationFormula,
     nullCount, minValue, maxValue, uniqueCount, uniques, meanValue, stddevValue, sumValue,
   ].join('');
-  useEffect(() => { setSaved(false); }, [formKey]);
+  useEffect(() => { setSaved(false); setNameError(null); }, [formKey]);
 
   const handleSave = async () => {
     if (!selectedColumn || !column) return;
+
+    // Apply a rename first (re-points edges); abort the save if it's invalid so
+    // the user can fix the name before metadata is written.
+    const nextName = colName.trim().toUpperCase();
+    if (nextName !== column.name) {
+      const err = await renameColumn(selectedColumn.datasetId, column.name, nextName);
+      if (err) { setNameError(err); return; }
+    }
 
     const num = (s: string) => (s.trim() === '' ? undefined : Number(s));
 
@@ -155,6 +163,13 @@ export function ColumnEditorPanel() {
           <tr className="border-b border-border/60">
             <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Table Name</td>
             <td className="px-2 py-1 font-mono text-[11px] text-foreground break-all">{node?.name}</td>
+          </tr>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Column Name</td>
+            <td className="px-2 py-1">
+              <Input value={colName} onChange={e => setColName(e.target.value.toUpperCase())} className="h-6 text-xs border-border font-mono rounded-md" />
+              {nameError && <div className="text-[10px] font-mono text-destructive mt-1">{nameError}</div>}
+            </td>
           </tr>
 
           {/* General */}
