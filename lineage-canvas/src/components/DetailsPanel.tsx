@@ -52,37 +52,37 @@ export function DetailsPanel() {
   if (!selectedNodeId || !node || !meta) return null;
 
   return (
-    <div className="fixed top-0 right-0 h-screen w-[50vw] bg-[#f5f5f5] border-l-2 border-[#cccccc] flex flex-col z-20">
+    <div className="fixed top-0 right-0 h-screen w-[50vw] max-w-[640px] bg-card border-l border-border shadow-xl flex flex-col z-20 animate-slide-in-right">
       <Tabs defaultValue="metadata" className="h-full flex flex-col">
-        <div className="bg-gradient-to-b from-[#e8e8e8] to-[#d0d0d0] border-b-2 border-[#999999]">
-          <div className="px-3 py-2 border-b border-[#bbbbbb]">
+        <div className="bg-muted/40 border-b border-border">
+          <div className="px-3 py-2 border-b border-border">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 flex-1 min-w-0">
-                <span className="font-mono text-sm font-bold text-[#333333] truncate">{node.name}</span>
-                <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 border-[#999999] bg-[#ffffff] shrink-0">
+                <span className="font-mono text-sm font-bold text-foreground truncate">{node.name}</span>
+                <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 border-border bg-background shrink-0">
                   {systemLabel}
                 </Badge>
               </div>
               <Button
                 onClick={handleClose}
-                className="h-5 w-5 p-0 ml-2 bg-transparent hover:bg-[#cccccc] text-[#666666] hover:text-[#333333] border-0 rounded-none shrink-0"
+                className="h-5 w-5 p-0 ml-2 bg-transparent hover:bg-muted text-muted-foreground hover:text-foreground border-0 rounded-md shrink-0"
               >
                 <X size={14} />
               </Button>
             </div>
-            <div className="text-[10px] font-mono text-[#666666] mt-0.5 truncate">{node.datasetId}</div>
+            <div className="text-[10px] font-mono text-muted-foreground mt-0.5 truncate">{node.datasetId}</div>
           </div>
 
-          <TabsList className="grid w-full grid-cols-2 bg-transparent h-8 p-0 gap-0">
+          <TabsList className="grid w-full grid-cols-2 bg-transparent h-8 p-0 gap-0 rounded-none">
             <TabsTrigger
               value="metadata"
-              className="rounded-none border-r border-[#999999] data-[state=active]:bg-[#f5f5f5] data-[state=inactive]:bg-[#d8d8d8] data-[state=active]:border-b-2 data-[state=active]:border-b-[#f5f5f5] font-mono text-xs"
+              className="rounded-none border-r border-border data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:bg-muted/60 data-[state=inactive]:text-muted-foreground font-mono text-xs"
             >
               Metadata
             </TabsTrigger>
             <TabsTrigger
               value="columns"
-              className="rounded-none data-[state=active]:bg-[#f5f5f5] data-[state=inactive]:bg-[#d8d8d8] data-[state=active]:border-b-2 data-[state=active]:border-b-[#f5f5f5] font-mono text-xs"
+              className="rounded-none data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:bg-muted/60 data-[state=inactive]:text-muted-foreground font-mono text-xs"
             >
               Columns ({node.columns.length})
             </TabsTrigger>
@@ -92,36 +92,36 @@ export function DetailsPanel() {
         <TabsContent value="metadata" className="flex-1 mt-0 overflow-y-auto">
           <table className="w-full border-collapse text-xs">
             <tbody>
-              <tr className="bg-gradient-to-b from-[#e0e0e0] to-[#d5d5d5]">
-                <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-[#999999]">
+              <tr className="bg-muted/60">
+                <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-border">
                   Identity
                 </td>
               </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] w-[130px] border-r border-[#dddddd]">Namespace</td>
-                <td className="px-2 py-1 font-mono text-[11px] text-[#333333] break-all">{node.namespace}</td>
+              <tr className="border-b border-border/60">
+                <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] w-[130px] border-r border-border/60">Namespace</td>
+                <td className="px-2 py-1 font-mono text-[11px] text-foreground break-all">{node.namespace}</td>
               </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Table Name</td>
-                <td className="px-2 py-1 font-mono text-[11px] text-[#333333] break-all">{node.name}</td>
+              <tr className="border-b border-border/60">
+                <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Table Name</td>
+                <td className="px-2 py-1 font-mono text-[11px] text-foreground break-all">{node.name}</td>
               </tr>
 
-              <tr className="bg-gradient-to-b from-[#e0e0e0] to-[#d5d5d5]">
-                <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-[#999999] border-t-2 border-t-[#999999]">
+              <tr className="bg-muted/60">
+                <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-border border-t border-border">
                   Table Metadata
                 </td>
               </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Description</td>
+              <tr className="border-b border-border/60">
+                <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Description</td>
                 <td className="px-2 py-1">
-                  <Input value={meta.description || ''} onChange={e => setMeta({...meta, description: e.target.value})} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+                  <Input value={meta.description || ''} onChange={e => setMeta({...meta, description: e.target.value})} className="h-6 text-xs border-border font-mono rounded-md" />
                 </td>
               </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Environment</td>
+              <tr className="border-b border-border/60">
+                <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Environment</td>
                 <td className="px-2 py-1">
                   <Select value={meta.environment || "UNASSIGNED"} onValueChange={(val: any) => setMeta({...meta, environment: val === "UNASSIGNED" ? undefined : val})}>
-                    <SelectTrigger className="h-6 text-xs border-[#999999] font-mono rounded-none">
+                    <SelectTrigger className="h-6 text-xs border-border font-mono rounded-md">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -134,29 +134,29 @@ export function DetailsPanel() {
                   </Select>
                 </td>
               </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Business Domain</td>
+              <tr className="border-b border-border/60">
+                <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Business Domain</td>
                 <td className="px-2 py-1">
-                  <Input value={meta.businessDomain || ''} onChange={e => setMeta({...meta, businessDomain: e.target.value})} className="h-6 text-xs border-[#999999] font-mono rounded-none" placeholder="Claims, Policy, Billing, Finance" />
+                  <Input value={meta.businessDomain || ''} onChange={e => setMeta({...meta, businessDomain: e.target.value})} className="h-6 text-xs border-border font-mono rounded-md" placeholder="Claims, Policy, Billing, Finance" />
                 </td>
               </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Row Count</td>
+              <tr className="border-b border-border/60">
+                <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Row Count</td>
                 <td className="px-2 py-1">
-                  <Input type="number" value={meta.rowCount ?? ''} onChange={e => setMeta({...meta, rowCount: e.target.value === '' ? undefined : Number(e.target.value)})} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+                  <Input type="number" value={meta.rowCount ?? ''} onChange={e => setMeta({...meta, rowCount: e.target.value === '' ? undefined : Number(e.target.value)})} className="h-6 text-xs border-border font-mono rounded-md" />
                 </td>
               </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Column Count</td>
+              <tr className="border-b border-border/60">
+                <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Column Count</td>
                 <td className="px-2 py-1">
-                  <Input type="number" value={meta.columnCount ?? ''} onChange={e => setMeta({...meta, columnCount: e.target.value === '' ? undefined : Number(e.target.value)})} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+                  <Input type="number" value={meta.columnCount ?? ''} onChange={e => setMeta({...meta, columnCount: e.target.value === '' ? undefined : Number(e.target.value)})} className="h-6 text-xs border-border font-mono rounded-md" />
                 </td>
               </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Has Primary Key</td>
+              <tr className="border-b border-border/60">
+                <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Has Primary Key</td>
                 <td className="px-2 py-1">
                   <Select value={meta.hasPrimaryKey === undefined ? "UNASSIGNED" : String(meta.hasPrimaryKey)} onValueChange={(val: any) => setMeta({...meta, hasPrimaryKey: val === "UNASSIGNED" ? undefined : val === "true"})}>
-                    <SelectTrigger className="h-6 text-xs border-[#999999] font-mono rounded-none">
+                    <SelectTrigger className="h-6 text-xs border-border font-mono rounded-md">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -167,23 +167,23 @@ export function DetailsPanel() {
                   </Select>
                 </td>
               </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Unique Key Columns</td>
+              <tr className="border-b border-border/60">
+                <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Unique Key Columns</td>
                 <td className="px-2 py-1">
-                  <Input value={meta.uniqueKeyColumns || ''} onChange={e => setMeta({...meta, uniqueKeyColumns: e.target.value})} className="h-6 text-xs border-[#999999] font-mono rounded-none" placeholder="comma-separated column names" />
+                  <Input value={meta.uniqueKeyColumns || ''} onChange={e => setMeta({...meta, uniqueKeyColumns: e.target.value})} className="h-6 text-xs border-border font-mono rounded-md" placeholder="comma-separated column names" />
                 </td>
               </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Grain</td>
+              <tr className="border-b border-border/60">
+                <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Grain</td>
                 <td className="px-2 py-1">
-                  <Input value={meta.grainDescription || ''} onChange={e => setMeta({...meta, grainDescription: e.target.value})} className="h-6 text-xs border-[#999999] font-mono rounded-none" placeholder="one row per ..." />
+                  <Input value={meta.grainDescription || ''} onChange={e => setMeta({...meta, grainDescription: e.target.value})} className="h-6 text-xs border-border font-mono rounded-md" placeholder="one row per ..." />
                 </td>
               </tr>
-              <tr className="border-b border-[#dddddd]">
-                <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Refresh Frequency</td>
+              <tr className="border-b border-border/60">
+                <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Refresh Frequency</td>
                 <td className="px-2 py-1">
                   <Select value={meta.refreshFrequency || "UNASSIGNED"} onValueChange={(val: any) => setMeta({...meta, refreshFrequency: val === "UNASSIGNED" ? undefined : val})}>
-                    <SelectTrigger className="h-6 text-xs border-[#999999] font-mono rounded-none">
+                    <SelectTrigger className="h-6 text-xs border-border font-mono rounded-md">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -199,23 +199,23 @@ export function DetailsPanel() {
             </tbody>
           </table>
 
-          <div className="p-2 border-t-2 border-[#999999]">
+          <div className="p-2 border-t-2 border-border">
             {saved && (
               <div className="flex items-center justify-center gap-1 mb-2 text-[11px] font-mono text-green-700">
                 <Check size={12} /> Save successful
               </div>
             )}
-            <Button onClick={handleSave} className="w-full h-7 bg-gradient-to-b from-[#5b9dd9] to-[#306b9c] hover:from-[#6aadea] hover:to-[#407cb0] text-white font-mono text-xs rounded-none border border-[#234567]">
+            <Button onClick={handleSave} className="w-full h-7 bg-primary hover:bg-primary/90 text-primary-foreground font-mono text-xs rounded-md">
               Save Metadata
             </Button>
           </div>
 
-          <div className="border-t-2 border-[#999999] bg-[#ffe0e0]">
-            <div className="bg-gradient-to-b from-[#f5d0d0] to-[#eababa] px-2 py-1 border-b border-[#cc9999]">
-              <h3 className="text-[10px] font-mono font-bold text-[#cc0000] uppercase">Danger Zone</h3>
+          <div className="border-t border-border bg-destructive/5">
+            <div className="bg-destructive/10 px-2 py-1 border-b border-destructive/20">
+              <h3 className="text-[10px] font-mono font-bold text-destructive uppercase">Danger Zone</h3>
             </div>
             <div className="p-2">
-              <p className="text-[10px] font-mono text-[#990000] mb-2">
+              <p className="text-[10px] font-mono text-destructive/90 mb-2">
                 Delete table and all edges permanently.
               </p>
               <Button
@@ -224,7 +224,7 @@ export function DetailsPanel() {
                     deleteTableNode(node.datasetId);
                   }
                 }}
-                className="h-7 bg-gradient-to-b from-[#dd5555] to-[#aa3333] hover:from-[#ee6666] hover:to-[#bb4444] text-white font-mono text-xs rounded-none border border-[#770000]"
+                className="h-7 bg-destructive hover:bg-destructive/90 text-white font-mono text-xs rounded-md"
               >
                 Delete Table
               </Button>

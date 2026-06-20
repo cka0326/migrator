@@ -72,7 +72,7 @@ export function CustomTableNode({ data, id }: NodeProps<any>) {
 
   return (
     <div
-      className={`bg-card border-2 rounded-md shadow-sm w-[280px] text-left overflow-visible ${origin === 'STUB' ? 'border-dashed border-orange-300' : 'border-slate-300'} ${focusClasses}`}
+      className={`bg-card border-2 rounded-lg shadow-sm w-[280px] text-left overflow-visible transition-shadow duration-150 hover:shadow-md ${origin === 'STUB' ? 'border-dashed border-orange-300' : 'border-slate-300'} ${focusClasses}`}
     >
       {/* Table-level Handles */}
       <Handle type="target" position={Position.Left} id="table-target" className="w-3 h-3 bg-slate-400 cursor-crosshair" />

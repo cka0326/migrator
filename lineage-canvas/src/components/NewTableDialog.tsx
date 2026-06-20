@@ -83,7 +83,7 @@ export function NewTableDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="default" />}>
+      <DialogTrigger render={<Button variant="default" size="sm" />}>
         + New Table
       </DialogTrigger>
       <DialogContent>

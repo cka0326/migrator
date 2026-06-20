@@ -232,6 +232,9 @@ export function CompareView() {
     next.has(f) ? next.delete(f) : next.add(f);
     return next;
   });
+  // When on, every diff surface hides rows that are identical, showing only the
+  // actual differences.
+  const [showOnlyDiffs, setShowOnlyDiffs] = useState(false);
 
   // "Legacy vs Target" selections (within the active project)
   const [leftCanvasId, setLeftCanvasId] = useState<string | null>(null);
@@ -487,7 +490,7 @@ export function CompareView() {
                 </tr>
               </thead>
               <tbody>
-                {metaDiff.map(f => (
+                {(showOnlyDiffs ? metaDiff.filter(f => f.changed) : metaDiff).map(f => (
                   <tr key={f.field} className={`border-b last:border-0 ${f.changed ? 'bg-amber-50/40' : ''}`}>
                     <td className="px-3 py-1.5 text-slate-500">{f.field}</td>
                     <td className={`px-3 py-1.5 font-mono ${f.changed ? 'text-red-700' : 'text-slate-700'}`}>{f.a || '∅'}</td>
@@ -495,6 +498,9 @@ export function CompareView() {
                     <td className={`px-3 py-1.5 font-mono ${f.changed ? 'text-green-700' : 'text-slate-700'}`}>{f.b || '∅'}</td>
                   </tr>
                 ))}
+                {showOnlyDiffs && metaChangedCount === 0 && (
+                  <tr><td colSpan={4} className="px-3 py-3 text-center text-slate-400">No differences in the compared fields.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -516,7 +522,7 @@ export function CompareView() {
                 </tr>
               </thead>
               <tbody>
-                {diff.columns.map(col => {
+                {(showOnlyDiffs ? diff.columns.filter(c => c.status !== 'same') : diff.columns).map(col => {
                   const inLeft = col.status !== 'added';   // present on side A unless added on B
                   const inRight = col.status !== 'removed'; // present on side B unless removed from A
                   return (
@@ -561,6 +567,9 @@ export function CompareView() {
                   </tr>
                   );
                 })}
+                {showOnlyDiffs && (diff.summary.added + diff.summary.removed + diff.summary.changed) === 0 && (
+                  <tr><td colSpan={4} className="px-3 py-3 text-center text-slate-400">No column differences.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -588,6 +597,19 @@ export function CompareView() {
             {modeBtn('projects', 'Across projects')}
             {modeBtn('columns', 'Compare columns')}
           </div>
+
+          <label
+            className={`flex items-center gap-1.5 text-xs font-medium cursor-pointer select-none px-2 py-1 rounded-md border transition-colors ${showOnlyDiffs ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-white border-border text-slate-600 hover:bg-slate-50'}`}
+            title="Hide identical rows and show only the differences"
+          >
+            <input
+              type="checkbox"
+              className="accent-amber-600"
+              checked={showOnlyDiffs}
+              onChange={(e) => setShowOnlyDiffs(e.target.checked)}
+            />
+            Only differences
+          </label>
 
           <Popover>
             <PopoverTrigger
@@ -720,7 +742,7 @@ export function CompareView() {
                       ) : (
                         <table className="w-full text-xs">
                           <tbody>
-                            {fields.map(f => (
+                            {(showOnlyDiffs ? fields.filter(f => f.changed) : fields).map(f => (
                               <tr key={f.field} className={`border-b last:border-0 ${f.changed ? 'bg-amber-50/40' : ''}`}>
                                 <td className="px-3 py-1.5 text-slate-500 w-32">{f.field}</td>
                                 <td className={`px-3 py-1.5 font-mono ${f.changed ? 'text-red-700' : 'text-slate-700'}`}>{f.a || '∅'}</td>
@@ -728,6 +750,9 @@ export function CompareView() {
                                 <td className={`px-3 py-1.5 font-mono ${f.changed ? 'text-green-700' : 'text-slate-700'}`}>{f.b || '∅'}</td>
                               </tr>
                             ))}
+                            {showOnlyDiffs && changedCount === 0 && (
+                              <tr><td colSpan={4} className="px-3 py-3 text-center text-slate-400">No differences — columns are identical.</td></tr>
+                            )}
                           </tbody>
                         </table>
                       ))}

@@ -32,7 +32,7 @@ export function UploadsRegistry() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="ghost" />}>
+      <DialogTrigger render={<Button variant="ghost" size="sm" />}>
         Upload History
       </DialogTrigger>
       <DialogContent className="max-w-3xl">

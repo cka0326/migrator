@@ -104,27 +104,27 @@ export function ColumnEditorPanel() {
   if (!selectedColumn || !column) return null;
 
   return (
-    <div className="fixed top-0 right-[50vw] h-screen w-[35vw] bg-[#f5f5f5] border-l-2 border-[#cccccc] flex flex-col z-20 overflow-y-auto">
+    <div className="fixed top-0 right-[min(50vw,640px)] h-screen w-[35vw] max-w-[480px] bg-card border-l border-border shadow-xl flex flex-col z-20 overflow-y-auto animate-emerge-left">
       {/* Header */}
-      <div className="bg-gradient-to-b from-[#e8e8e8] to-[#d0d0d0] border-b-2 border-[#999999] px-3 py-2 sticky top-0 z-10">
+      <div className="bg-muted/40 border-b border-border px-3 py-2 sticky top-0 z-10">
         <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="font-mono text-sm font-bold text-[#333333] truncate min-w-0">{column.name}</span>
+          <span className="font-mono text-sm font-bold text-foreground truncate min-w-0">{column.name}</span>
           <Button
             onClick={handleClose}
-            className="h-5 w-5 p-0 shrink-0 bg-transparent hover:bg-[#cccccc] text-[#666666] hover:text-[#333333] border-0 rounded-none"
+            className="h-5 w-5 p-0 shrink-0 bg-transparent hover:bg-muted text-muted-foreground hover:text-foreground border-0 rounded-md"
           >
             <X size={14} />
           </Button>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-[#666666]">Column Metadata</span>
+          <span className="text-[10px] font-mono text-muted-foreground">Column Metadata</span>
           <div className="ml-auto flex items-center gap-2">
             {saved && (
               <span className="flex items-center gap-1 text-[10px] font-mono text-green-700">
                 <Check size={11} /> Save successful
               </span>
             )}
-            <Button onClick={handleSave} className="h-6 px-3 bg-gradient-to-b from-[#5b9dd9] to-[#306b9c] hover:from-[#6aadea] hover:to-[#407cb0] text-white font-mono text-[10px] rounded-none border border-[#234567]">
+            <Button onClick={handleSave} className="h-6 px-3 bg-primary hover:bg-primary/90 text-primary-foreground font-mono text-[10px] rounded-md">
               Save
             </Button>
           </div>
@@ -135,37 +135,37 @@ export function ColumnEditorPanel() {
       <table className="w-full border-collapse text-xs">
         <tbody>
           {/* Identity */}
-          <tr className="bg-gradient-to-b from-[#e0e0e0] to-[#d5d5d5]">
-            <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-[#999999]">
+          <tr className="bg-muted/60">
+            <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-border">
               Identity
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] w-[130px] border-r border-[#dddddd]">Namespace</td>
-            <td className="px-2 py-1 font-mono text-[11px] text-[#333333] break-all">{node?.namespace}</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] w-[130px] border-r border-border/60">Namespace</td>
+            <td className="px-2 py-1 font-mono text-[11px] text-foreground break-all">{node?.namespace}</td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Table Name</td>
-            <td className="px-2 py-1 font-mono text-[11px] text-[#333333] break-all">{node?.name}</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Table Name</td>
+            <td className="px-2 py-1 font-mono text-[11px] text-foreground break-all">{node?.name}</td>
           </tr>
 
           {/* General */}
-          <tr className="bg-gradient-to-b from-[#e0e0e0] to-[#d5d5d5]">
-            <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-[#999999] border-t-2 border-t-[#999999]">
+          <tr className="bg-muted/60">
+            <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-border border-t border-border">
               General
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Data Type</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Data Type</td>
             <td className="px-2 py-1">
-              <Input value={dataType} onChange={e => setDataType(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input value={dataType} onChange={e => setDataType(e.target.value)} className="h-6 text-xs border-border font-mono rounded-md" />
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Nullable</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Nullable</td>
             <td className="px-2 py-1">
               <Select value={nullable} onValueChange={setNullable}>
-                <SelectTrigger className="h-6 text-xs border-[#999999] font-mono rounded-none">
+                <SelectTrigger className="h-6 text-xs border-border font-mono rounded-md">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -176,99 +176,99 @@ export function ColumnEditorPanel() {
               </Select>
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Max Length</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Max Length</td>
             <td className="px-2 py-1">
-              <Input type="number" value={maxLength} onChange={e => setMaxLength(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input type="number" value={maxLength} onChange={e => setMaxLength(e.target.value)} className="h-6 text-xs border-border font-mono rounded-md" />
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Precision</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Precision</td>
             <td className="px-2 py-1">
-              <Input type="number" value={precision} onChange={e => setPrecision(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input type="number" value={precision} onChange={e => setPrecision(e.target.value)} className="h-6 text-xs border-border font-mono rounded-md" />
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Default Value</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Default Value</td>
             <td className="px-2 py-1">
-              <Input value={defaultValue} onChange={e => setDefaultValue(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input value={defaultValue} onChange={e => setDefaultValue(e.target.value)} className="h-6 text-xs border-border font-mono rounded-md" />
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Definition</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Definition</td>
             <td className="px-2 py-1">
               <textarea
                 value={columnDefinition}
                 onChange={e => setColumnDefinition(e.target.value)}
-                className="w-full min-h-[44px] px-2 py-1 text-xs border border-[#999999] font-mono rounded-none resize-y"
+                className="w-full min-h-[44px] px-2 py-1 text-xs border border-border font-mono rounded-md resize-y"
                 placeholder="Definition of the column"
               />
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Computation Formula</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Computation Formula</td>
             <td className="px-2 py-1">
               <textarea
                 value={columnComputationFormula}
                 onChange={e => setColumnComputationFormula(e.target.value)}
-                className="w-full min-h-[44px] px-2 py-1 text-xs border border-[#999999] font-mono rounded-none resize-y"
+                className="w-full min-h-[44px] px-2 py-1 text-xs border border-border font-mono rounded-md resize-y"
                 placeholder="Formula for computing the column"
               />
             </td>
           </tr>
 
           {/* Statistics */}
-          <tr className="bg-gradient-to-b from-[#e0e0e0] to-[#d5d5d5]">
-            <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-[#999999] border-t-2 border-t-[#999999]">
+          <tr className="bg-muted/60">
+            <td colSpan={2} className="px-2 py-1 font-mono font-bold text-[10px] uppercase border-b border-border border-t border-border">
               Statistics
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Null Count</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Null Count</td>
             <td className="px-2 py-1">
-              <Input type="number" value={nullCount} onChange={e => setNullCount(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input type="number" value={nullCount} onChange={e => setNullCount(e.target.value)} className="h-6 text-xs border-border font-mono rounded-md" />
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Min Value</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Min Value</td>
             <td className="px-2 py-1">
-              <Input value={minValue} onChange={e => setMinValue(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input value={minValue} onChange={e => setMinValue(e.target.value)} className="h-6 text-xs border-border font-mono rounded-md" />
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Max Value</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Max Value</td>
             <td className="px-2 py-1">
-              <Input value={maxValue} onChange={e => setMaxValue(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input value={maxValue} onChange={e => setMaxValue(e.target.value)} className="h-6 text-xs border-border font-mono rounded-md" />
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Unique Count</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Unique Count</td>
             <td className="px-2 py-1">
-              <Input type="number" value={uniqueCount} onChange={e => setUniqueCount(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input type="number" value={uniqueCount} onChange={e => setUniqueCount(e.target.value)} className="h-6 text-xs border-border font-mono rounded-md" />
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Uniques</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Uniques</td>
             <td className="px-2 py-1">
-              <Input value={uniques} onChange={e => setUniques(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" placeholder="comma-separated" />
+              <Input value={uniques} onChange={e => setUniques(e.target.value)} className="h-6 text-xs border-border font-mono rounded-md" placeholder="comma-separated" />
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Mean</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Mean</td>
             <td className="px-2 py-1">
-              <Input type="number" step="any" value={meanValue} onChange={e => setMeanValue(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input type="number" step="any" value={meanValue} onChange={e => setMeanValue(e.target.value)} className="h-6 text-xs border-border font-mono rounded-md" />
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Std Deviation</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Std Deviation</td>
             <td className="px-2 py-1">
-              <Input type="number" step="any" value={stddevValue} onChange={e => setStddevValue(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input type="number" step="any" value={stddevValue} onChange={e => setStddevValue(e.target.value)} className="h-6 text-xs border-border font-mono rounded-md" />
             </td>
           </tr>
-          <tr className="border-b border-[#dddddd]">
-            <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Sum</td>
+          <tr className="border-b border-border/60">
+            <td className="px-2 py-1 bg-muted/40 font-mono text-[11px] border-r border-border/60">Sum</td>
             <td className="px-2 py-1">
-              <Input type="number" step="any" value={sumValue} onChange={e => setSumValue(e.target.value)} className="h-6 text-xs border-[#999999] font-mono rounded-none" />
+              <Input type="number" step="any" value={sumValue} onChange={e => setSumValue(e.target.value)} className="h-6 text-xs border-border font-mono rounded-md" />
             </td>
           </tr>
         </tbody>
