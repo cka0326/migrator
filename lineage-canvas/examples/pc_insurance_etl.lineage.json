@@ -1,0 +1,245 @@
+{
+  "schema_version": "1.0",
+  "tables": [
+    { "name": "CUST", "namespace": "RAW", "columns": [
+      { "name": "CUST_ID", "data_type": "NUMBER" },
+      { "name": "FIRST_NAME", "data_type": "CHAR" },
+      { "name": "LAST_NAME", "data_type": "CHAR" },
+      { "name": "BIRTH_DT", "data_type": "NUMBER" },
+      { "name": "ORG_FLAG", "data_type": "NUMBER" },
+      { "name": "TAX_ID", "data_type": "CHAR" }
+    ]},
+    { "name": "POL", "namespace": "RAW", "columns": [
+      { "name": "POL_SK", "data_type": "NUMBER" },
+      { "name": "POL_NO", "data_type": "CHAR" },
+      { "name": "INSURED_ID", "data_type": "NUMBER" },
+      { "name": "EFF_DT", "data_type": "CHAR" },
+      { "name": "EXP_DT", "data_type": "CHAR" },
+      { "name": "WP_AMT", "data_type": "NUMBER" },
+      { "name": "STATUS_CD", "data_type": "CHAR" }
+    ]},
+    { "name": "COV", "namespace": "RAW", "columns": [
+      { "name": "COV_SK", "data_type": "NUMBER" },
+      { "name": "POL_SK", "data_type": "NUMBER" },
+      { "name": "COV_CODE", "data_type": "CHAR" },
+      { "name": "LIMIT_AMT", "data_type": "NUMBER" },
+      { "name": "DEDUCTIBLE_AMT", "data_type": "NUMBER" },
+      { "name": "BASE_PREM", "data_type": "NUMBER" },
+      { "name": "RATING_FACTOR", "data_type": "NUMBER" }
+    ]},
+    { "name": "LOC", "namespace": "RAW", "columns": [
+      { "name": "LOC_SK", "data_type": "NUMBER" },
+      { "name": "POL_SK", "data_type": "NUMBER" },
+      { "name": "ADDR1", "data_type": "CHAR" },
+      { "name": "CITY", "data_type": "CHAR" },
+      { "name": "STATE_CD", "data_type": "CHAR" },
+      { "name": "ZIP", "data_type": "CHAR" },
+      { "name": "CONSTR_TYPE", "data_type": "CHAR" },
+      { "name": "YR_BUILT", "data_type": "NUMBER" },
+      { "name": "TIV_AMT", "data_type": "NUMBER" }
+    ]},
+    { "name": "CLM", "namespace": "RAW", "columns": [
+      { "name": "CLM_SK", "data_type": "NUMBER" },
+      { "name": "CLM_NO", "data_type": "CHAR" },
+      { "name": "POL_SK", "data_type": "NUMBER" },
+      { "name": "COV_SK", "data_type": "NUMBER" },
+      { "name": "ADJUSTER_ID", "data_type": "NUMBER" },
+      { "name": "LOSS_DT", "data_type": "CHAR" },
+      { "name": "RPT_DT", "data_type": "CHAR" },
+      { "name": "CLM_STATUS", "data_type": "CHAR" },
+      { "name": "PERIL_DESC", "data_type": "CHAR" },
+      { "name": "CASE_RESERVE", "data_type": "NUMBER" }
+    ]},
+    { "name": "PAY", "namespace": "RAW", "columns": [
+      { "name": "PAY_SK", "data_type": "NUMBER" },
+      { "name": "CLM_SK", "data_type": "NUMBER" },
+      { "name": "PAY_TYPE", "data_type": "CHAR" },
+      { "name": "PAY_DT", "data_type": "CHAR" },
+      { "name": "PAY_AMT", "data_type": "NUMBER" },
+      { "name": "RSV_DELTA", "data_type": "NUMBER" }
+    ]},
+
+    { "name": "PARTY", "namespace": "INS", "columns": [
+      { "name": "PARTY_ID", "data_type": "NUMBER" },
+      { "name": "PARTY_NAME", "data_type": "VARCHAR" },
+      { "name": "PARTY_TYPE", "data_type": "VARCHAR" },
+      { "name": "DATE_OF_BIRTH", "data_type": "DATE" },
+      { "name": "TAX_IDENTIFIER", "data_type": "VARCHAR" }
+    ]},
+    { "name": "POLICY", "namespace": "INS", "columns": [
+      { "name": "POLICY_ID", "data_type": "NUMBER" },
+      { "name": "POLICY_NUMBER", "data_type": "VARCHAR" },
+      { "name": "CUST_ID", "data_type": "NUMBER" },
+      { "name": "CUSTOMER_ID", "data_type": "NUMBER" },
+      { "name": "EFFECTIVE_DATE", "data_type": "DATE" },
+      { "name": "EXPIRATION_DATE", "data_type": "DATE" },
+      { "name": "TERM_MONTHS", "data_type": "NUMBER" },
+      { "name": "WRITTEN_PREMIUM", "data_type": "DECIMAL" },
+      { "name": "POLICY_STATUS", "data_type": "VARCHAR" }
+    ]},
+    { "name": "COVERAGE", "namespace": "INS", "columns": [
+      { "name": "COVERAGE_ID", "data_type": "NUMBER" },
+      { "name": "POLICY_ID", "data_type": "NUMBER" },
+      { "name": "COVERAGE_CODE", "data_type": "VARCHAR" },
+      { "name": "LIMIT_AMOUNT", "data_type": "DECIMAL" },
+      { "name": "DEDUCTIBLE_AMOUNT", "data_type": "DECIMAL" },
+      { "name": "COVERAGE_PREMIUM", "data_type": "DECIMAL" }
+    ]},
+    { "name": "INSURED_LOCATION", "namespace": "INS", "columns": [
+      { "name": "LOCATION_ID", "data_type": "NUMBER" },
+      { "name": "POLICY_ID", "data_type": "NUMBER" },
+      { "name": "ADDRESS_LINE1", "data_type": "VARCHAR" },
+      { "name": "CITY", "data_type": "VARCHAR" },
+      { "name": "STATE", "data_type": "VARCHAR" },
+      { "name": "POSTAL_CODE", "data_type": "VARCHAR" },
+      { "name": "CONSTRUCTION_TYPE", "data_type": "VARCHAR" },
+      { "name": "YEAR_BUILT", "data_type": "NUMBER" },
+      { "name": "TIV", "data_type": "DECIMAL" }
+    ]},
+    { "name": "CLAIM_STAGE", "namespace": "DEFAULT_UNKNOWN", "columns": [
+      { "name": "CLAIM_ID", "data_type": "NUMBER" },
+      { "name": "CLAIM_NUMBER", "data_type": "VARCHAR" },
+      { "name": "POLICY_ID", "data_type": "NUMBER" },
+      { "name": "COVERAGE_ID", "data_type": "NUMBER" },
+      { "name": "ADJUSTER_ID", "data_type": "NUMBER" },
+      { "name": "LOSS_DATE", "data_type": "DATE" },
+      { "name": "REPORT_DATE", "data_type": "DATE" },
+      { "name": "CLAIM_STATUS", "data_type": "VARCHAR" },
+      { "name": "CAUSE_OF_LOSS", "data_type": "VARCHAR" },
+      { "name": "RESERVE_AMOUNT", "data_type": "DECIMAL" }
+    ]},
+    { "name": "CLAIM", "namespace": "INS", "columns": [
+      { "name": "CLAIM_ID", "data_type": "NUMBER" },
+      { "name": "CLAIM_NUMBER", "data_type": "VARCHAR" },
+      { "name": "POLICY_ID", "data_type": "NUMBER" },
+      { "name": "COVERAGE_ID", "data_type": "NUMBER" },
+      { "name": "LOSS_DATE", "data_type": "DATE" },
+      { "name": "REPORT_DATE", "data_type": "DATE" },
+      { "name": "CLAIM_STATUS", "data_type": "VARCHAR" },
+      { "name": "CAUSE_OF_LOSS", "data_type": "VARCHAR" },
+      { "name": "RESERVE_AMOUNT", "data_type": "DECIMAL" },
+      { "name": "ADJUSTER_NAME", "data_type": "VARCHAR" }
+    ]},
+    { "name": "CLAIM_TRANSACTION", "namespace": "INS", "columns": [
+      { "name": "CLAIM_TXN_ID", "data_type": "NUMBER" },
+      { "name": "CLAIM_ID", "data_type": "NUMBER" },
+      { "name": "TXN_TYPE", "data_type": "VARCHAR" },
+      { "name": "TXN_DATE", "data_type": "DATE" },
+      { "name": "PAID_AMOUNT", "data_type": "DECIMAL" },
+      { "name": "RESERVE_CHANGE", "data_type": "DECIMAL" }
+    ]},
+
+    { "name": "POLICY_PREMIUM_SUMMARY", "namespace": "MART", "columns": [
+      { "name": "POLICY_ID", "data_type": "NUMBER" },
+      { "name": "POLICY_NUMBER", "data_type": "VARCHAR" },
+      { "name": "TOTAL_WRITTEN_PREMIUM", "data_type": "DECIMAL" },
+      { "name": "TOTAL_COVERAGE_PREMIUM", "data_type": "DECIMAL" },
+      { "name": "TOTAL_TIV", "data_type": "DECIMAL" },
+      { "name": "CLAIM_COUNT", "data_type": "NUMBER" },
+      { "name": "TOTAL_INCURRED", "data_type": "DECIMAL" }
+    ]},
+    { "name": "CLAIMS_KPI", "namespace": "MART", "columns": [
+      { "name": "POLICY_ID", "data_type": "NUMBER" },
+      { "name": "CAUSE_OF_LOSS", "data_type": "VARCHAR" },
+      { "name": "CLAIM_COUNT", "data_type": "NUMBER" },
+      { "name": "PAID_TO_DATE", "data_type": "DECIMAL" },
+      { "name": "AVG_PAYMENT", "data_type": "DECIMAL" }
+    ]}
+  ],
+  "table_connections": [
+    { "from": "CUST", "to": "PARTY" },
+    { "from": "POL", "to": "POLICY" },
+    { "from": "COV", "to": "COVERAGE" },
+    { "from": "POLICY", "to": "COVERAGE" },
+    { "from": "LOC", "to": "INSURED_LOCATION" },
+    { "from": "POLICY", "to": "INSURED_LOCATION" },
+    { "from": "CLM", "to": "CLAIM_STAGE" },
+    { "from": "CLAIM_STAGE", "to": "CLAIM" },
+    { "from": "ADJ", "to": "CLAIM" },
+    { "from": "PAY", "to": "CLAIM_TRANSACTION" },
+    { "from": "POLICY", "to": "POLICY_PREMIUM_SUMMARY" },
+    { "from": "COVERAGE", "to": "POLICY_PREMIUM_SUMMARY" },
+    { "from": "INSURED_LOCATION", "to": "POLICY_PREMIUM_SUMMARY" },
+    { "from": "CLAIM", "to": "POLICY_PREMIUM_SUMMARY" },
+    { "from": "CLAIM_TRANSACTION", "to": "POLICY_PREMIUM_SUMMARY" },
+    { "from": "CLAIM", "to": "CLAIMS_KPI" },
+    { "from": "CLAIM_TRANSACTION", "to": "CLAIMS_KPI" }
+  ],
+  "column_connections": [
+    { "target": { "table": "PARTY", "column": "PARTY_ID" }, "sources": [ { "table": "CUST", "column": "CUST_ID" } ] },
+    { "target": { "table": "PARTY", "column": "PARTY_NAME" }, "sources": [ { "table": "CUST", "column": "FIRST_NAME" }, { "table": "CUST", "column": "LAST_NAME" } ] },
+    { "target": { "table": "PARTY", "column": "PARTY_TYPE" }, "sources": [ { "table": "CUST", "column": "ORG_FLAG" } ] },
+    { "target": { "table": "PARTY", "column": "DATE_OF_BIRTH" }, "sources": [ { "table": "CUST", "column": "BIRTH_DT" } ] },
+    { "target": { "table": "PARTY", "column": "TAX_IDENTIFIER" }, "sources": [ { "table": "CUST", "column": "TAX_ID" } ] },
+
+    { "target": { "table": "POLICY", "column": "POLICY_ID" }, "sources": [ { "table": "POL", "column": "POL_SK" } ] },
+    { "target": { "table": "POLICY", "column": "POLICY_NUMBER" }, "sources": [ { "table": "POL", "column": "POL_NO" } ] },
+    { "target": { "table": "POLICY", "column": "CUST_ID" }, "sources": [ { "table": "POL", "column": "INSURED_ID" } ] },
+    { "target": { "table": "POLICY", "column": "CUSTOMER_ID" }, "sources": [ { "table": "POL", "column": "INSURED_ID" } ] },
+    { "target": { "table": "POLICY", "column": "EFFECTIVE_DATE" }, "sources": [ { "table": "POL", "column": "EFF_DT" } ] },
+    { "target": { "table": "POLICY", "column": "EXPIRATION_DATE" }, "sources": [ { "table": "POL", "column": "EXP_DT" } ] },
+    { "target": { "table": "POLICY", "column": "TERM_MONTHS" }, "sources": [ { "table": "POL", "column": "EFF_DT" }, { "table": "POL", "column": "EXP_DT" } ] },
+    { "target": { "table": "POLICY", "column": "WRITTEN_PREMIUM" }, "sources": [ { "table": "POL", "column": "WP_AMT" } ] },
+    { "target": { "table": "POLICY", "column": "POLICY_STATUS" }, "sources": [ { "table": "POL", "column": "STATUS_CD" } ] },
+
+    { "target": { "table": "COVERAGE", "column": "COVERAGE_ID" }, "sources": [ { "table": "COV", "column": "COV_SK" } ] },
+    { "target": { "table": "COVERAGE", "column": "POLICY_ID" }, "sources": [ { "table": "POLICY", "column": "POLICY_ID" } ] },
+    { "target": { "table": "COVERAGE", "column": "COVERAGE_CODE" }, "sources": [ { "table": "COV", "column": "COV_CODE" } ] },
+    { "target": { "table": "COVERAGE", "column": "LIMIT_AMOUNT" }, "sources": [ { "table": "COV", "column": "LIMIT_AMT" } ] },
+    { "target": { "table": "COVERAGE", "column": "DEDUCTIBLE_AMOUNT" }, "sources": [ { "table": "COV", "column": "DEDUCTIBLE_AMT" } ] },
+    { "target": { "table": "COVERAGE", "column": "COVERAGE_PREMIUM" }, "sources": [ { "table": "COV", "column": "BASE_PREM" }, { "table": "COV", "column": "RATING_FACTOR" } ] },
+
+    { "target": { "table": "INSURED_LOCATION", "column": "LOCATION_ID" }, "sources": [ { "table": "LOC", "column": "LOC_SK" } ] },
+    { "target": { "table": "INSURED_LOCATION", "column": "POLICY_ID" }, "sources": [ { "table": "POLICY", "column": "POLICY_ID" } ] },
+    { "target": { "table": "INSURED_LOCATION", "column": "ADDRESS_LINE1" }, "sources": [ { "table": "LOC", "column": "ADDR1" } ] },
+    { "target": { "table": "INSURED_LOCATION", "column": "CITY" }, "sources": [ { "table": "LOC", "column": "CITY" } ] },
+    { "target": { "table": "INSURED_LOCATION", "column": "STATE" }, "sources": [ { "table": "LOC", "column": "STATE_CD" } ] },
+    { "target": { "table": "INSURED_LOCATION", "column": "POSTAL_CODE" }, "sources": [ { "table": "LOC", "column": "ZIP" } ] },
+    { "target": { "table": "INSURED_LOCATION", "column": "CONSTRUCTION_TYPE" }, "sources": [ { "table": "LOC", "column": "CONSTR_TYPE" } ] },
+    { "target": { "table": "INSURED_LOCATION", "column": "YEAR_BUILT" }, "sources": [ { "table": "LOC", "column": "YR_BUILT" } ] },
+    { "target": { "table": "INSURED_LOCATION", "column": "TIV" }, "sources": [ { "table": "LOC", "column": "TIV_AMT" } ] },
+
+    { "target": { "table": "CLAIM_STAGE", "column": "CLAIM_ID" }, "sources": [ { "table": "CLM", "column": "CLM_SK" } ] },
+    { "target": { "table": "CLAIM_STAGE", "column": "CLAIM_NUMBER" }, "sources": [ { "table": "CLM", "column": "CLM_NO" } ] },
+    { "target": { "table": "CLAIM_STAGE", "column": "POLICY_ID" }, "sources": [ { "table": "CLM", "column": "POL_SK" } ] },
+    { "target": { "table": "CLAIM_STAGE", "column": "COVERAGE_ID" }, "sources": [ { "table": "CLM", "column": "COV_SK" } ] },
+    { "target": { "table": "CLAIM_STAGE", "column": "ADJUSTER_ID" }, "sources": [ { "table": "CLM", "column": "ADJUSTER_ID" } ] },
+    { "target": { "table": "CLAIM_STAGE", "column": "LOSS_DATE" }, "sources": [ { "table": "CLM", "column": "LOSS_DT" } ] },
+    { "target": { "table": "CLAIM_STAGE", "column": "REPORT_DATE" }, "sources": [ { "table": "CLM", "column": "RPT_DT" } ] },
+    { "target": { "table": "CLAIM_STAGE", "column": "CLAIM_STATUS" }, "sources": [ { "table": "CLM", "column": "CLM_STATUS" } ] },
+    { "target": { "table": "CLAIM_STAGE", "column": "CAUSE_OF_LOSS" }, "sources": [ { "table": "CLM", "column": "PERIL_DESC" } ] },
+    { "target": { "table": "CLAIM_STAGE", "column": "RESERVE_AMOUNT" }, "sources": [ { "table": "CLM", "column": "CASE_RESERVE" } ] },
+
+    { "target": { "table": "CLAIM", "column": "CLAIM_ID" }, "sources": [ { "table": "CLAIM_STAGE", "column": "CLAIM_ID" } ] },
+    { "target": { "table": "CLAIM", "column": "CLAIM_NUMBER" }, "sources": [ { "table": "CLAIM_STAGE", "column": "CLAIM_NUMBER" } ] },
+    { "target": { "table": "CLAIM", "column": "POLICY_ID" }, "sources": [ { "table": "CLAIM_STAGE", "column": "POLICY_ID" } ] },
+    { "target": { "table": "CLAIM", "column": "COVERAGE_ID" }, "sources": [ { "table": "CLAIM_STAGE", "column": "COVERAGE_ID" } ] },
+    { "target": { "table": "CLAIM", "column": "LOSS_DATE" }, "sources": [ { "table": "CLAIM_STAGE", "column": "LOSS_DATE" } ] },
+    { "target": { "table": "CLAIM", "column": "REPORT_DATE" }, "sources": [ { "table": "CLAIM_STAGE", "column": "REPORT_DATE" } ] },
+    { "target": { "table": "CLAIM", "column": "CLAIM_STATUS" }, "sources": [ { "table": "CLAIM_STAGE", "column": "CLAIM_STATUS" } ] },
+    { "target": { "table": "CLAIM", "column": "CAUSE_OF_LOSS" }, "sources": [ { "table": "CLAIM_STAGE", "column": "CAUSE_OF_LOSS" } ] },
+    { "target": { "table": "CLAIM", "column": "RESERVE_AMOUNT" }, "sources": [ { "table": "CLAIM_STAGE", "column": "RESERVE_AMOUNT" } ] },
+    { "target": { "table": "CLAIM", "column": "ADJUSTER_NAME" }, "sources": [ { "table": "ADJ", "column": "ADJUSTER_NAME" } ] },
+
+    { "target": { "table": "CLAIM_TRANSACTION", "column": "CLAIM_TXN_ID" }, "sources": [ { "table": "PAY", "column": "PAY_SK" } ] },
+    { "target": { "table": "CLAIM_TRANSACTION", "column": "CLAIM_ID" }, "sources": [ { "table": "PAY", "column": "CLM_SK" } ] },
+    { "target": { "table": "CLAIM_TRANSACTION", "column": "TXN_TYPE" }, "sources": [ { "table": "PAY", "column": "PAY_TYPE" } ] },
+    { "target": { "table": "CLAIM_TRANSACTION", "column": "TXN_DATE" }, "sources": [ { "table": "PAY", "column": "PAY_DT" } ] },
+    { "target": { "table": "CLAIM_TRANSACTION", "column": "PAID_AMOUNT" }, "sources": [ { "table": "PAY", "column": "PAY_AMT" } ] },
+    { "target": { "table": "CLAIM_TRANSACTION", "column": "RESERVE_CHANGE" }, "sources": [ { "table": "PAY", "column": "RSV_DELTA" } ] },
+
+    { "target": { "table": "POLICY_PREMIUM_SUMMARY", "column": "POLICY_ID" }, "sources": [ { "table": "POLICY", "column": "POLICY_ID" } ] },
+    { "target": { "table": "POLICY_PREMIUM_SUMMARY", "column": "POLICY_NUMBER" }, "sources": [ { "table": "POLICY", "column": "POLICY_NUMBER" } ] },
+    { "target": { "table": "POLICY_PREMIUM_SUMMARY", "column": "TOTAL_WRITTEN_PREMIUM" }, "sources": [ { "table": "POLICY", "column": "WRITTEN_PREMIUM" } ] },
+    { "target": { "table": "POLICY_PREMIUM_SUMMARY", "column": "TOTAL_COVERAGE_PREMIUM" }, "sources": [ { "table": "COVERAGE", "column": "COVERAGE_PREMIUM" } ] },
+    { "target": { "table": "POLICY_PREMIUM_SUMMARY", "column": "TOTAL_TIV" }, "sources": [ { "table": "INSURED_LOCATION", "column": "TIV" } ] },
+    { "target": { "table": "POLICY_PREMIUM_SUMMARY", "column": "CLAIM_COUNT" }, "sources": [ { "table": "CLAIM", "column": "CLAIM_ID" } ] },
+    { "target": { "table": "POLICY_PREMIUM_SUMMARY", "column": "TOTAL_INCURRED" }, "sources": [ { "table": "CLAIM_TRANSACTION", "column": "PAID_AMOUNT" }, { "table": "CLAIM_TRANSACTION", "column": "RESERVE_CHANGE" } ] },
+
+    { "target": { "table": "CLAIMS_KPI", "column": "POLICY_ID" }, "sources": [ { "table": "CLAIM", "column": "POLICY_ID" } ] },
+    { "target": { "table": "CLAIMS_KPI", "column": "CAUSE_OF_LOSS" }, "sources": [ { "table": "CLAIM", "column": "CAUSE_OF_LOSS" } ] },
+    { "target": { "table": "CLAIMS_KPI", "column": "CLAIM_COUNT" }, "sources": [ { "table": "CLAIM", "column": "CLAIM_ID" } ] },
+    { "target": { "table": "CLAIMS_KPI", "column": "PAID_TO_DATE" }, "sources": [ { "table": "CLAIM_TRANSACTION", "column": "PAID_AMOUNT" } ] },
+    { "target": { "table": "CLAIMS_KPI", "column": "AVG_PAYMENT" }, "sources": [ { "table": "CLAIM_TRANSACTION", "column": "PAID_AMOUNT" } ] }
+  ]
+}
