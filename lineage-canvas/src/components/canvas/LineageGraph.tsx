@@ -29,6 +29,8 @@ function SystemCanvas({ system }: SystemCanvasProps) {
 
   const addTableEdge = useStore(state => state.addTableEdge);
   const addColumnEdge = useStore(state => state.addColumnEdge);
+  const deleteTableEdge = useStore(state => state.deleteTableEdge);
+  const deleteColumnEdge = useStore(state => state.deleteColumnEdge);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -163,6 +165,22 @@ function SystemCanvas({ system }: SystemCanvasProps) {
     await updateTableNodePosition(node.id, node.position);
   }, [updateTableNodePosition]);
 
+  // Persist edge deletions to the store. The rendered edges are derived from the
+  // store on every node move / re-render, so deleting only React Flow's local
+  // state would let the edge reappear. Removing it from the store makes it stick.
+  const onEdgesDelete = useCallback(async (deleted: Edge[]) => {
+    for (const edge of deleted) {
+      // Both edge types carry their underlying store record in `data`; fall back
+      // to the flow id for table edges whose id equals the store edgeId.
+      const storeEdgeId = (edge.data as any)?.edgeId ?? edge.id;
+      if (edge.type === 'columnEdge') {
+        await deleteColumnEdge(storeEdgeId);
+      } else {
+        await deleteTableEdge(storeEdgeId);
+      }
+    }
+  }, [deleteTableEdge, deleteColumnEdge]);
+
   const onConnect = useCallback(async (params: any) => {
     const { source, target, sourceHandle, targetHandle } = params;
     if (!source || !target || !sourceHandle || !targetHandle || !activeCanvasId) return;
@@ -203,10 +221,12 @@ function SystemCanvas({ system }: SystemCanvasProps) {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onEdgesDelete={onEdgesDelete}
         onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        deleteKeyCode={['Backspace', 'Delete']}
         fitView
       >
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#cbd5e1" />
