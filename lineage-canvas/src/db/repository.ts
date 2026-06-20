@@ -236,62 +236,6 @@ export const Repository = {
     });
   },
 
-  // ---------- Workspace export / import ----------
-  async getWorkspaceExport() {
-    const projects = await db.projects.toArray();
-    const canvases = await db.canvases.toArray();
-    const comparisons = await db.comparisons.toArray();
-    const tableNodes = await db.tableNodes.toArray();
-    const processRecs = await db.processRecs.toArray();
-    const tableEdges = await db.tableEdges.toArray();
-    const columnEdges = await db.columnEdges.toArray();
-    const uploadRecs = await db.uploadRecs.toArray();
-    const editEvents = await db.editEvents.toArray();
-
-    return {
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      data: {
-        projects,
-        canvases,
-        comparisons,
-        tableNodes,
-        processRecs,
-        tableEdges,
-        columnEdges,
-        uploadRecs,
-        editEvents
-      }
-    };
-  },
-
-  async importWorkspace(workspaceData: any) {
-    const { data } = workspaceData;
-    await db.transaction('rw',
-      [db.projects, db.canvases, db.comparisons, db.tableNodes, db.processRecs, db.tableEdges, db.columnEdges, db.uploadRecs, db.editEvents],
-      async () => {
-        await db.projects.clear();
-        await db.canvases.clear();
-        await db.comparisons.clear();
-        await db.tableNodes.clear();
-        await db.processRecs.clear();
-        await db.tableEdges.clear();
-        await db.columnEdges.clear();
-        await db.uploadRecs.clear();
-        await db.editEvents.clear();
-
-        if (data.projects?.length) await db.projects.bulkAdd(data.projects);
-        if (data.canvases?.length) await db.canvases.bulkAdd(data.canvases);
-        if (data.comparisons?.length) await db.comparisons.bulkAdd(data.comparisons);
-        if (data.tableNodes?.length) await db.tableNodes.bulkAdd(data.tableNodes);
-        if (data.processRecs?.length) await db.processRecs.bulkAdd(data.processRecs);
-        if (data.tableEdges?.length) await db.tableEdges.bulkAdd(data.tableEdges);
-        if (data.columnEdges?.length) await db.columnEdges.bulkAdd(data.columnEdges);
-        if (data.uploadRecs?.length) await db.uploadRecs.bulkAdd(data.uploadRecs);
-        if (data.editEvents?.length) await db.editEvents.bulkAdd(data.editEvents);
-      });
-  },
-
   // ---------- Bundle import (additive — never clears existing data) ----------
   // A project bundle arrives with freshly-remapped ids, so a straight bulkPut is safe.
   async saveImportedProjectBundle(g: {
