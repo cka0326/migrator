@@ -229,7 +229,7 @@ You can build the lineage map incrementally by importing files. Re-importing is 
 
 If you generate lineage programmatically (e.g. by parsing SAS/SQL, or via an AI agent), export a JSON extract and click **Upload JSON**. The file is validated against a Zod schema (`src/schema/lineageSchema.ts`). Imports are **additive** — they add tables/columns/connections and never overwrite existing metadata or delete connections; re-importing the same file is idempotent.
 
-> **Extracting lineage from SAS/SQL with an AI agent?** See **[`EXTRACTION.md`](./EXTRACTION.md)** for the ready-to-use agent prompt, the JSON contract, identity rules, and a worked example.
+> **Extracting lineage from SAS/SQL/Snowflake with an AI agent?** Use the header **Downloads** menu to get the JSON schema and a dialect-specific prompt (SAS / SQL / Snowflake), then see **[`EXTRACTION.md`](./EXTRACTION.md)** for the end-to-end workflow (extract → Upload JSON → validation screen).
 
 Minimal shape (`schema_version` must be `"1.0"`):
 

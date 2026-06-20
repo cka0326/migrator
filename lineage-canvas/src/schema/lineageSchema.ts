@@ -1,73 +1,43 @@
 import { z } from 'zod';
 
-export const ExtractSchema = z.object({
-  extract_id: z.string(),
-  source_system: z.enum(["LEGACY", "TARGET"]),
-  source_file_name: z.string(),
-  default_namespace: z.string().optional(),
-  generated_by: z.string().optional(),
-  generated_at: z.string().optional()
-});
+// v1.0 lineage extract — intentionally minimal (mirrors the Excel template). It
+// carries only TABLES, clearly-referenced COLUMNS (+ data types), TABLE→TABLE
+// connections, and COLUMN→COLUMN connections. No system, no metadata, no processes
+// — the user picks project/canvas/system and edits namespaces/metadata in the
+// validation screen at upload time. Tables are referenced everywhere by `name`,
+// which must be unique within one extract. See public/extraction/lineage-extract.schema.json.
 
-export const DatasetSchema = z.object({
-  dataset_id: z.string(),
-  system: z.enum(["LEGACY", "TARGET"]),
-  namespace: z.string(),
+const ColumnSchema = z.object({
   name: z.string(),
-  qualified_name: z.string(),
-  columns: z.array(z.object({
-    name: z.string(),
-    data_type: z.string(),
-    ordinal: z.number().optional()
-  })).optional()
+  data_type: z.string().optional(),
 });
 
-export const ProcessSchema = z.object({
-  process_id: z.string(),
-  sequence: z.number().optional(),
-  name: z.string().optional(),
-  operation_type: z.string(),
-  source_file: z.string(),
-  code_location: z.object({
-    start_line: z.number().nullable().optional(),
-    end_line: z.number().nullable().optional()
-  }).optional(),
-  inputs: z.array(z.string()),
-  outputs: z.array(z.string()),
-  description: z.string().optional(),
-  snippet: z.string().optional()
+const TableSchema = z.object({
+  name: z.string(),
+  namespace: z.string().optional(),
+  columns: z.array(ColumnSchema).optional().default([]),
 });
 
-export const TableEdgeSchema = z.object({
-  edge_id: z.string(),
-  from_dataset: z.string(),
-  to_dataset: z.string(),
-  process_id: z.string()
+const TableConnectionSchema = z.object({
+  from: z.string(),
+  to: z.string(),
 });
 
-export const ColumnEdgeSchema = z.object({
-  edge_id: z.string(),
-  target: z.object({
-    dataset_id: z.string(),
-    column: z.string()
-  }),
-  sources: z.array(z.object({
-    dataset_id: z.string(),
-    column: z.string()
-  })),
-  process_id: z.string(),
-  transformation_type: z.enum(["DIRECT", "RENAME", "CAST", "EXPRESSION", "AGGREGATION", "WINDOW", "CASE", "CONSTANT", "UNKNOWN"]),
-  expression: z.string().optional(),
-  confidence: z.enum(["HIGH", "MEDIUM", "LOW"]).optional()
+const ColumnRefSchema = z.object({
+  table: z.string(),
+  column: z.string(),
+});
+
+const ColumnConnectionSchema = z.object({
+  target: ColumnRefSchema,
+  sources: z.array(ColumnRefSchema).min(1),
 });
 
 export const LineageExtractSchema = z.object({
-  schema_version: z.string().refine(val => val === "1.0", { message: "Only schema_version 1.0 is supported" }),
-  extract: ExtractSchema,
-  datasets: z.array(DatasetSchema).optional().default([]),
-  processes: z.array(ProcessSchema).optional().default([]),
-  table_edges: z.array(TableEdgeSchema).optional().default([]),
-  column_edges: z.array(ColumnEdgeSchema).optional().default([])
+  schema_version: z.string().refine(val => val === '1.0', { message: 'Only schema_version 1.0 is supported' }),
+  tables: z.array(TableSchema).optional().default([]),
+  table_connections: z.array(TableConnectionSchema).optional().default([]),
+  column_connections: z.array(ColumnConnectionSchema).optional().default([]),
 });
 
 export type LineageExtract = z.infer<typeof LineageExtractSchema>;

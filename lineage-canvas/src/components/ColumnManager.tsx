@@ -5,7 +5,8 @@ import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
-import { Search } from 'lucide-react';
+import { Search, GitMerge } from 'lucide-react';
+import { MergeColumnsDialog } from './MergeColumnsDialog';
 import type { ColumnDef } from '../types/models';
 
 export function ColumnManager({ datasetId }: { datasetId: string }) {
@@ -18,6 +19,14 @@ export function ColumnManager({ datasetId }: { datasetId: string }) {
   const [newColName, setNewColName] = useState('');
   const [newColType, setNewColType] = useState('VARCHAR');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [mergeOpen, setMergeOpen] = useState(false);
+
+  const toggleSelected = (name: string) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(name) ? next.delete(name) : next.add(name);
+    return next;
+  });
 
   if (!node) return null;
 
@@ -48,6 +57,12 @@ export function ColumnManager({ datasetId }: { datasetId: string }) {
     <div className="space-y-4 pt-2">
       <div className="flex justify-between items-center pb-2 border-b">
         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Columns ({node.columns.length})</h3>
+        <div className="flex items-center gap-1.5">
+        {selected.size >= 2 && (
+          <Button variant="outline" size="sm" onClick={() => setMergeOpen(true)}>
+            <GitMerge size={13} className="mr-1" /> Merge ({selected.size})
+          </Button>
+        )}
         <Dialog open={isAdding} onOpenChange={setIsAdding}>
           <DialogTrigger render={<Button variant="outline" size="sm" />}>
             + Add Column
@@ -72,6 +87,7 @@ export function ColumnManager({ datasetId }: { datasetId: string }) {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Search Bar */}
@@ -99,6 +115,14 @@ export function ColumnManager({ datasetId }: { datasetId: string }) {
               onClick={() => selectColumn(datasetId, col.name)}
             >
               <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="accent-primary shrink-0"
+                  checked={selected.has(col.name)}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => toggleSelected(col.name)}
+                  title="Select to merge"
+                />
                 <span className="font-mono font-semibold text-slate-800">{col.name}</span>
                 <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0">{col.dataType}</Badge>
                 {col.metadata?.nullable === false && <Badge className="bg-slate-200 text-slate-700 border-slate-300 text-[8px] px-1 py-0 hover:bg-slate-200">NOT NULL</Badge>}
@@ -137,6 +161,13 @@ export function ColumnManager({ datasetId }: { datasetId: string }) {
           </div>
         )}
       </div>
+
+      <MergeColumnsDialog
+        open={mergeOpen}
+        onOpenChange={(o) => { setMergeOpen(o); if (!o) setSelected(new Set()); }}
+        datasetId={datasetId}
+        columns={node.columns.filter(c => selected.has(c.name))}
+      />
     </div>
   );
 }

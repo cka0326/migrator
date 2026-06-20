@@ -1,18 +1,25 @@
-import { ingestLineageJSON } from '../db/ingestion';
+import { parseLineageExtract, ingestParsedModel } from '../db/ingestion';
+import type { ParsedImportModel } from './importModel';
+import type { System } from '../types/models';
+
+/** Parse a JSON extract file into the editable import model (no DB writes). */
+export async function parseLineageJSON(file: File): Promise<{ model: ParsedImportModel; rawPayload: string }> {
+  const content = await file.text();
+  return { model: parseLineageExtract(content), rawPayload: content };
+}
 
 /**
- * Ingest a JSON lineage extract into a canvas.
- *
- * Uploads are intentionally **always additive**: we never supersede or delete a
- * prior upload's tables, columns, or connections during ingest — even if a file
- * with the same name was uploaded before. Combined with the content-derived,
- * idempotent edge ids in `ingestLineageJSON`, re-importing the same (or an
- * updated) extract UPSERTS rather than duplicates.
- *
- * Removing an upload's contribution remains available as an explicit, user-driven
- * action in the Upload History dialog (`Repository.deleteUpload`).
+ * Convenience: parse + additively ingest a JSON extract into a canvas/system.
+ * The interactive flow (Header) parses first and lets the user review/edit the model
+ * in the validation dialog before calling ingestParsedModel directly; this helper
+ * keeps a one-call path for additive imports.
  */
-export async function processLineageUpload(file: File, canvasId: string) {
-  const content = await file.text();
-  await ingestLineageJSON(content, file.name, canvasId);
+export async function processLineageUpload(file: File, canvasId: string, system: System) {
+  const { model, rawPayload } = await parseLineageJSON(file);
+  return ingestParsedModel(model, { canvasId, defaultSystem: system }, {
+    mode: 'additive',
+    fileName: file.name,
+    kind: 'LINEAGE_JSON',
+    rawPayload,
+  });
 }

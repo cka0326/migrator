@@ -101,7 +101,7 @@ export interface TableNode {
   namespace: string;              // SAS library | "DATABASE.SCHEMA" (IMMUTABLE)
   name: string;                   // table/dataset name (IMMUTABLE)
   qualifiedName: string;          // canonical UPPERCASE
-  origin: "STUB" | "EXCEL" | "MANUAL"; // how the node first appeared
+  origin: "STUB" | "EXCEL" | "MANUAL" | "IMPORT"; // how the node first appeared (IMPORT = from a JSON lineage extract)
   completeness: "STUB" | "PARTIAL" | "COMPLETE"; // derived (§9)
   metadata: TableMetadata;
   columns: ColumnDef[];

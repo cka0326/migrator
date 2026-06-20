@@ -1,183 +1,231 @@
 import { v4 as uuidv4 } from 'uuid';
 import { LineageExtractSchema } from '../schema/lineageSchema';
+import { tableEdgeId, columnEdgeId } from '../lib/edgeIds';
+import {
+  DEFAULT_NAMESPACE,
+  type ParsedImportModel,
+  type ParsedTable,
+  type ImportTarget,
+  type ImportOptions,
+  type ImportSummary,
+} from '../lib/importModel';
 
-import type { UploadRec, ProcessRec, TableEdge, ColumnEdge, TableNode, ColumnDef, System } from '../types/models';
+import type { UploadRec, TableEdge, ColumnEdge, TableNode, ColumnDef, System } from '../types/models';
 import { db } from './database';
 
-export async function ingestLineageJSON(fileContent: string, fileName: string, canvasId: string) {
-  let parsed: any;
+const up = (s: string) => s.trim().toUpperCase();
+const stripUndefined = <T extends object>(o: T): Partial<T> =>
+  Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
+
+/**
+ * Parse + validate a v1.0 JSON extract into a source-agnostic ParsedImportModel.
+ * Identifiers are upper-cased and namespaces default to DEFAULT_UNKNOWN so the model
+ * lines up with how tables are identified in the canvas.
+ */
+export function parseLineageExtract(fileContent: string): ParsedImportModel {
+  let parsed: unknown;
   try {
     parsed = JSON.parse(fileContent);
-  } catch (e) {
-    throw new Error("Invalid JSON format");
+  } catch {
+    throw new Error('Invalid JSON format');
   }
 
   const result = LineageExtractSchema.safeParse(parsed);
   if (!result.success) {
     throw new Error(`Schema validation failed: ${result.error.message}`);
   }
-
   const data = result.data;
+
+  return {
+    source: 'JSON',
+    tables: data.tables.map(t => ({
+      name: up(t.name),
+      namespace: t.namespace && t.namespace.trim() ? up(t.namespace) : DEFAULT_NAMESPACE,
+      columns: (t.columns || []).map(c => ({ name: up(c.name), dataType: c.data_type })),
+    })),
+    tableConnections: data.table_connections.map(tc => ({ from: up(tc.from), to: up(tc.to) })),
+    columnConnections: data.column_connections.map(cc => ({
+      target: { table: up(cc.target.table), column: up(cc.target.column) },
+      sources: cc.sources.map(s => ({ table: up(s.table), column: up(s.column) })),
+    })),
+  };
+}
+
+/**
+ * Write a ParsedImportModel into a canvas. Additive by default: creates missing
+ * tables, APPENDS new columns to existing tables, and adds connections — never
+ * overwriting metadata or deleting anything. The override modes (Excel) additionally
+ * overwrite metadata and (for 'override-metadata-connections') REPLACE the affected
+ * tables' connections. All writes happen in one transaction.
+ */
+export async function ingestParsedModel(
+  model: ParsedImportModel,
+  target: ImportTarget,
+  options: ImportOptions,
+): Promise<ImportSummary> {
+  const { canvasId, defaultSystem } = target;
+  const { mode } = options;
   const uploadId = uuidv4();
-  const system = data.extract.source_system as System;
+  const now = new Date().toISOString();
 
-  // Every datasetId is scoped to the owning canvas so it is globally unique.
-  const scope = (id: string) => `${canvasId}::${id}`;
+  const tableByName = new Map<string, ParsedTable>();
+  for (const t of model.tables) tableByName.set(t.name, t);
 
-  let stubsCreated = 0;
-  
-  const edgeReferencedColumns = new Map<string, Set<string>>();
-  for (const ce of data.column_edges) {
-    if (!edgeReferencedColumns.has(ce.target.dataset_id)) edgeReferencedColumns.set(ce.target.dataset_id, new Set());
-    edgeReferencedColumns.get(ce.target.dataset_id)!.add(ce.target.column);
-    
-    for (const source of ce.sources) {
-      if (!edgeReferencedColumns.has(source.dataset_id)) edgeReferencedColumns.set(source.dataset_id, new Set());
-      edgeReferencedColumns.get(source.dataset_id)!.add(source.column);
-    }
+  const systemOf = (name: string): System => tableByName.get(name)?.system ?? defaultSystem;
+  const namespaceOf = (name: string): string => tableByName.get(name)?.namespace ?? DEFAULT_NAMESPACE;
+  const datasetIdOf = (name: string): string => `${canvasId}::${systemOf(name)}:${namespaceOf(name)}.${name}`;
+
+  // Every table name referenced anywhere (declared or only in a connection).
+  const allNames = new Set<string>(model.tables.map(t => t.name));
+  for (const tc of model.tableConnections) { allNames.add(tc.from); allNames.add(tc.to); }
+  for (const cc of model.columnConnections) {
+    allNames.add(cc.target.table);
+    for (const s of cc.sources) allNames.add(s.table);
   }
 
-  // We use Dexie transaction for all these writes
-  await db.transaction('rw', [db.tableNodes, db.processRecs, db.tableEdges, db.columnEdges, db.uploadRecs], async () => {
-    
-    // 1. Reconcile Datasets
-    for (const ds of data.datasets) {
-      const scopedDatasetId = scope(ds.dataset_id);
-      const existingNode = await db.tableNodes.get(scopedDatasetId);
-      
-      const extractColumns = ds.columns || [];
-      const edgeCols = edgeReferencedColumns.get(ds.dataset_id) || new Set();
-      const allColNames = new Set([...extractColumns.map(c => c.name), ...edgeCols]);
+  // Columns referenced by column connections, grouped by table name (so referenced
+  // columns are materialised even if the table didn't list them).
+  const edgeCols = new Map<string, Set<string>>();
+  const addEdgeCol = (table: string, column: string) => {
+    if (!edgeCols.has(table)) edgeCols.set(table, new Set());
+    edgeCols.get(table)!.add(column);
+  };
+  for (const cc of model.columnConnections) {
+    addEdgeCol(cc.target.table, cc.target.column);
+    for (const s of cc.sources) addEdgeCol(s.table, s.column);
+  }
 
-      const finalColumns: ColumnDef[] = existingNode ? [...existingNode.columns] : [];
+  const summary: ImportSummary = { tables: 0, newTables: 0, columnsAdded: 0, tableEdges: 0, columnEdges: 0, stubsCreated: 0 };
 
-      for (const colName of allColNames) {
-        if (!finalColumns.some(c => c.name === colName)) {
-          const extractCol = extractColumns.find(c => c.name === colName);
-          finalColumns.push({
+  await db.transaction('rw', [db.tableNodes, db.tableEdges, db.columnEdges, db.uploadRecs], async () => {
+    // 'override-metadata-connections': replace the affected (declared) tables' edges.
+    if (mode === 'override-metadata-connections') {
+      const affected = new Set(model.tables.map(t => datasetIdOf(t.name)));
+      const te = await db.tableEdges.where('canvasId').equals(canvasId).toArray();
+      const teDel = te.filter(e => affected.has(e.fromDataset) || affected.has(e.toDataset)).map(e => e.edgeId);
+      if (teDel.length) await db.tableEdges.bulkDelete(teDel);
+      const ce = await db.columnEdges.where('canvasId').equals(canvasId).toArray();
+      const ceDel = ce.filter(e => affected.has(e.target.datasetId) || e.sources.some(s => affected.has(s.datasetId))).map(e => e.edgeId);
+      if (ceDel.length) await db.columnEdges.bulkDelete(ceDel);
+    }
+
+    // Reconcile every referenced table.
+    for (const name of allNames) {
+      const datasetId = datasetIdOf(name);
+      const declared = tableByName.get(name);
+      const existing = await db.tableNodes.get(datasetId);
+
+      const declaredCols = declared?.columns ?? [];
+      const referenced = edgeCols.get(name) ?? new Set<string>();
+      const wantNames = new Set<string>([...declaredCols.map(c => c.name), ...referenced]);
+
+      const columns: ColumnDef[] = existing ? [...existing.columns] : [];
+      const byName = new Map(columns.map(c => [c.name, c] as const));
+
+      for (const colName of wantNames) {
+        const dcl = declaredCols.find(c => c.name === colName);
+        const found = byName.get(colName);
+        if (!found) {
+          const col: ColumnDef = {
             name: colName,
-            dataType: extractCol?.data_type || 'UNKNOWN',
-            ordinal: extractCol?.ordinal || finalColumns.length + 1,
-            origin: 'LINEAGE',
-            metadata: {},
-            stats: {},
-            createdByUploadId: existingNode ? undefined : uploadId
-          });
+            dataType: dcl?.dataType ? up(dcl.dataType) : 'UNKNOWN',
+            ordinal: columns.length + 1,
+            origin: model.source === 'EXCEL' ? 'EXCEL' : 'LINEAGE',
+            metadata: dcl?.metadata ? { ...dcl.metadata } : {},
+            stats: dcl?.stats ? { ...dcl.stats } : {},
+            createdByUploadId: existing ? undefined : uploadId,
+          };
+          columns.push(col);
+          byName.set(colName, col);
+          summary.columnsAdded++;
+        } else if (mode !== 'additive' && dcl) {
+          // Override modes refresh an existing column's type/metadata/stats from the import.
+          if (dcl.dataType) found.dataType = up(dcl.dataType);
+          if (dcl.metadata) found.metadata = { ...found.metadata, ...stripUndefined(dcl.metadata) };
+          if (dcl.stats) found.stats = { ...found.stats, ...stripUndefined(dcl.stats) };
         }
       }
 
-      if (existingNode) {
-        existingNode.columns = finalColumns;
-        if (!existingNode.referencedByUploadIds.includes(uploadId)) {
-            existingNode.referencedByUploadIds.push(uploadId);
+      if (existing) {
+        existing.columns = columns;
+        if (mode !== 'additive' && declared?.metadata) {
+          existing.metadata = { ...existing.metadata, ...stripUndefined(declared.metadata) };
         }
-        await db.tableNodes.put(existingNode);
+        // A previously-stubbed table that's now described becomes a real node.
+        if (declared && existing.origin === 'STUB') {
+          existing.origin = model.source === 'EXCEL' ? 'EXCEL' : 'IMPORT';
+          existing.completeness = 'PARTIAL';
+        }
+        if (!existing.referencedByUploadIds.includes(uploadId)) existing.referencedByUploadIds.push(uploadId);
+        existing.updatedAt = now;
+        await db.tableNodes.put(existing);
       } else {
-        const newNode: TableNode = {
-            datasetId: scopedDatasetId,
-            canvasId,
-            system: ds.system as System,
-            namespace: ds.namespace,
-            name: ds.name,
-            qualifiedName: ds.qualified_name,
-            origin: 'STUB',
-            completeness: 'STUB',
-            metadata: {
-              columnCount: finalColumns.length,
-            },
-            columns: finalColumns,
-            createdByUploadId: uploadId,
-            referencedByUploadIds: [uploadId],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+        const isStub = !declared;
+        const namespace = namespaceOf(name);
+        const node: TableNode = {
+          datasetId,
+          canvasId,
+          system: systemOf(name),
+          namespace,
+          name,
+          qualifiedName: `${namespace}.${name}`,
+          origin: isStub ? 'STUB' : (model.source === 'EXCEL' ? 'EXCEL' : 'IMPORT'),
+          completeness: isStub ? 'STUB' : 'PARTIAL',
+          metadata: { ...(declared?.metadata ? stripUndefined(declared.metadata) : {}), columnCount: columns.length },
+          columns,
+          createdByUploadId: uploadId,
+          referencedByUploadIds: [uploadId],
+          createdAt: now,
+          updatedAt: now,
         };
-        await db.tableNodes.put(newNode);
-        stubsCreated++;
+        await db.tableNodes.put(node);
+        summary.newTables++;
+        if (isStub) summary.stubsCreated++;
       }
+      summary.tables++;
     }
 
-    // 2. Create Processes
-    const processRecs: ProcessRec[] = data.processes.map(p => ({
-      processId: `${canvasId}::${p.process_id}`,
-      canvasId,
-      uploadId,
-      sequence: p.sequence || 0,
-      name: p.name || p.process_id,
-      operationType: p.operation_type,
-      sourceFile: p.source_file,
-      codeLocation: p.code_location ? { startLine: p.code_location.start_line || null, endLine: p.code_location.end_line || null } : undefined,
-      inputs: p.inputs.map(scope),
-      outputs: p.outputs.map(scope),
-      description: p.description,
-      snippet: p.snippet
-    }));
-    if (processRecs.length > 0) await db.processRecs.bulkAdd(processRecs);
-
-    // 3. Create TableEdges.
-    // The edgeId is derived from the (scoped) endpoints rather than the payload's
-    // edge_id, so re-importing the same lineage maps to the same id and UPSERTS
-    // instead of creating a duplicate connection. We de-dupe within this batch and
-    // use bulkPut (not bulkAdd) so a repeated edge can never throw and abort the
-    // transaction. Existing edges are only ever added/updated here, never removed.
-    const tableEdgeMap = new Map<string, TableEdge>();
-    for (const te of data.table_edges) {
-      const fromDataset = scope(te.from_dataset);
-      const toDataset = scope(te.to_dataset);
-      const edgeId = `TE|${fromDataset}|${toDataset}`;
-      tableEdgeMap.set(edgeId, {
-        edgeId,
-        canvasId,
-        uploadId,
-        fromDataset,
-        toDataset,
-        processId: `${canvasId}::${te.process_id}`
-      });
+    // Table edges (content ids → idempotent upsert, de-duped within the batch).
+    const teMap = new Map<string, TableEdge>();
+    for (const tc of model.tableConnections) {
+      const fromDataset = datasetIdOf(tc.from);
+      const toDataset = datasetIdOf(tc.to);
+      const edgeId = tableEdgeId(fromDataset, toDataset);
+      teMap.set(edgeId, { edgeId, canvasId, uploadId, fromDataset, toDataset, processId: `${canvasId}::IMPORT` });
     }
-    const tableEdges = [...tableEdgeMap.values()];
-    if (tableEdges.length > 0) await db.tableEdges.bulkPut(tableEdges);
+    if (teMap.size) await db.tableEdges.bulkPut([...teMap.values()]);
+    summary.tableEdges = teMap.size;
 
-    // 4. Create ColumnEdges. Same idempotency approach: the id is derived from the
-    // target column plus the sorted source keys, so re-imports upsert rather than
-    // duplicate.
-    const columnEdgeMap = new Map<string, ColumnEdge>();
-    for (const ce of data.column_edges) {
-      const target = { datasetId: scope(ce.target.dataset_id), column: ce.target.column };
-      const sources = ce.sources.map((s: any) => ({ datasetId: scope(s.dataset_id), column: s.column }));
-      const sortedSourceKeys = sources.map(s => `${s.datasetId}::${s.column}`).sort().join(',');
-      const edgeId = `CE|${target.datasetId}::${target.column}|${sortedSourceKeys}`;
-      columnEdgeMap.set(edgeId, {
-        edgeId,
-        canvasId,
-        uploadId,
-        target,
-        sources,
-        processId: `${canvasId}::${ce.process_id}`,
-        transformationType: ce.transformation_type as any,
-        expression: ce.expression,
-        confidence: ce.confidence as any
-      });
+    // Column edges.
+    const ceMap = new Map<string, ColumnEdge>();
+    for (const cc of model.columnConnections) {
+      const tgt = { datasetId: datasetIdOf(cc.target.table), column: cc.target.column };
+      const srcs = cc.sources.map(s => ({ datasetId: datasetIdOf(s.table), column: s.column }));
+      const edgeId = columnEdgeId(tgt, srcs);
+      ceMap.set(edgeId, { edgeId, canvasId, uploadId, target: tgt, sources: srcs, processId: `${canvasId}::IMPORT`, transformationType: 'UNKNOWN' });
     }
-    const columnEdges = [...columnEdgeMap.values()];
-    if (columnEdges.length > 0) await db.columnEdges.bulkPut(columnEdges);
+    if (ceMap.size) await db.columnEdges.bulkPut([...ceMap.values()]);
+    summary.columnEdges = ceMap.size;
 
-    // 5. Create UploadRec
     const uploadRec: UploadRec = {
       uploadId,
       canvasId,
-      kind: 'LINEAGE_JSON',
-      fileName,
-      system,
-      uploadedAt: new Date().toISOString(),
+      kind: options.kind,
+      fileName: options.fileName,
+      system: defaultSystem,
+      uploadedAt: now,
       status: 'ACTIVE',
       summary: {
-        datasets: data.datasets.length,
-        processes: data.processes.length,
-        tableEdges: data.table_edges.length,
-        columnEdges: data.column_edges.length,
-        stubsCreated
+        datasets: summary.tables,
+        processes: 0,
+        tableEdges: summary.tableEdges,
+        columnEdges: summary.columnEdges,
+        stubsCreated: summary.stubsCreated,
       },
-      rawPayload: fileContent
+      rawPayload: options.rawPayload ?? '',
     };
     await db.uploadRecs.put(uploadRec);
   });
+
+  return summary;
 }

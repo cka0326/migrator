@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lineage-canvas/schemas/lineage-extract-1.0.json",
+  "title": "Lineage Canvas — Lineage Extract (v1.0)",
+  "description": "The accepted shape for a lineage extract produced from a SAS/SQL/Snowflake script and loaded via the app's 'Upload JSON' button. The agent must output a SINGLE JSON object that validates against this schema and NOTHING else (no Markdown, no prose, no code fences). WHAT THIS CAPTURES — and ONLY this: (1) the TABLES the script reads/writes, (2) the COLUMNS that are clearly referenced, with their data types, (3) TABLE→TABLE connections, and (4) COLUMN→COLUMN connections. NUANCES: (a) Do NOT include the system (Legacy/Target) — Legacy and Target are independent flows and the user chooses the system, project, and canvas at upload time in a validation screen. (b) Do NOT include any metadata (descriptions, environment, row counts, nullability, transformation types, expressions, confidence, processes, etc.) — metadata is added by the user later; this format intentionally mirrors the simple Excel template. (c) Tables are referenced by `name` everywhere (in connections), so each table `name` must be UNIQUE within one extract. (d) UPPERCASE all identifiers (table names, namespaces, column names) — existing objects are stored uppercase, so matching avoids duplicates. (e) `namespace` is optional; if the script does not make it clear, omit it or use 'DEFAULT_UNKNOWN' (the user fixes namespaces in the validation screen). (f) Import is ADDITIVE: it creates missing tables, APPENDS new columns to existing tables, and adds connections; it never overwrites or deletes anything. So describe only what should EXIST. (g) Only include columns you can clearly tie to the script (declared in a SELECT/CREATE, or used in a connection) — do not invent columns.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Schema version. MUST be exactly the string \"1.0\"."
+    },
+    "tables": {
+      "type": "array",
+      "description": "Every table/dataset the script reads or writes. Optional, but include all you can identify so real tables (not bare stubs) are created. A table referenced only inside a connection but omitted here is auto-created as a minimal stub at import.",
+      "items": { "$ref": "#/$defs/table" }
+    },
+    "table_connections": {
+      "type": "array",
+      "description": "Table-to-table flow. One entry per (upstream table → downstream table) relationship the script establishes. Reference tables by their `name`.",
+      "items": { "$ref": "#/$defs/tableConnection" }
+    },
+    "column_connections": {
+      "type": "array",
+      "description": "Column-to-column lineage. One entry per OUTPUT column, listing the input column(s) it derives from. Reference tables by `name` and columns by `column`. This is the most valuable output — be precise and conservative.",
+      "items": { "$ref": "#/$defs/columnConnection" }
+    }
+  },
+  "$defs": {
+    "table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Table/dataset name, UPPERCASE. Must be UNIQUE within this extract (it is the key used by connections). Do NOT include the namespace or system here — just the table name (e.g. 'CUSTOMERS')."
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Optional schema/library the table lives in, UPPERCASE (SAS libref, or SQL/Snowflake schema, e.g. 'SALES' or 'ANALYTICS.PUBLIC'). If the script does not make it clear, OMIT this or set it to 'DEFAULT_UNKNOWN' — the user assigns/edits namespaces in the validation screen before import."
+        },
+        "columns": {
+          "type": "array",
+          "description": "The columns of this table that are clearly referenced by the script (declared in SELECT/CREATE or used in a connection). UPPERCASE names. Existing tables only GAIN new columns at import; existing columns are never modified.",
+          "items": { "$ref": "#/$defs/column" }
+        }
+      }
+    },
+    "column": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Column name, UPPERCASE."
+        },
+        "data_type": {
+          "type": "string",
+          "description": "Optional data type exactly as the script expresses it (e.g. 'NUMBER', 'VARCHAR', 'CHAR', 'DATE', 'NUMERIC(18,2)'). Omit if the script does not reveal it. Do not normalize types."
+        }
+      }
+    },
+    "tableConnection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": {
+          "type": "string",
+          "description": "Upstream table `name` (must match a table `name`, or it becomes a stub)."
+        },
+        "to": {
+          "type": "string",
+          "description": "Downstream table `name`."
+        }
+      }
+    },
+    "columnConnection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "sources"],
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/columnRef",
+          "description": "The OUTPUT column produced by the script."
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/columnRef" },
+          "description": "The INPUT column(s) the target derives from (one for a direct/renamed copy, several for combined expressions/aggregations)."
+        }
+      }
+    },
+    "columnRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["table", "column"],
+      "properties": {
+        "table": {
+          "type": "string",
+          "description": "Table `name` this column belongs to (UPPERCASE; must match a table `name`)."
+        },
+        "column": {
+          "type": "string",
+          "description": "Column name, UPPERCASE."
+        }
+      }
+    }
+  }
+}

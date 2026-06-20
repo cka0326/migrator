@@ -1,10 +1,30 @@
 import { useStore } from '../store/useStore';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Undo2, Redo2, Search, Database } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Undo2, Redo2, Search, Database, Download, ChevronDown, FileSpreadsheet, FileJson, FileText } from 'lucide-react';
 import { NewTableDialog } from './NewTableDialog';
 import { UploadsRegistry } from './UploadsRegistry';
+import { ImportValidationDialog } from './ImportValidationDialog';
+import type { ParsedImportModel } from '../lib/importModel';
 import { useState, useRef, useEffect } from 'react';
+
+interface PendingImport {
+  source: 'JSON' | 'EXCEL';
+  model: ParsedImportModel;
+  rawPayload?: string;
+  fileName: string;
+}
+
+// Trigger a browser download of a static asset shipped under public/.
+function downloadAsset(path: string, filename: string) {
+  const a = document.createElement('a');
+  a.href = `${import.meta.env.BASE_URL}${path}`;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
 
 export function Header() {
   // @ts-ignore
@@ -16,10 +36,7 @@ export function Header() {
   const project = useStore(state => state.activeProjectId ? state.projects[state.activeProjectId] : null);
   const canvas = useStore(state => state.activeCanvasId ? state.canvases[state.activeCanvasId] : null);
 
-  const reloadActiveCanvas = () => {
-    const cid = useStore.getState().activeCanvasId;
-    if (cid) useStore.getState().loadCanvas(cid);
-  };
+  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
 
   const systemLabel = (system: string) =>
     system === 'LEGACY' ? (project?.legacySystemName || 'Legacy') : (project?.targetSystemName || 'Target');
@@ -119,14 +136,33 @@ export function Header() {
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <UploadsRegistry />
-        <Button variant="outline" size="sm" onClick={() => {
-           const a = document.createElement('a');
-           a.href = `${import.meta.env.BASE_URL}templates/Lineage_Canvas_Template.xlsx`;
-           a.download = 'Lineage_Canvas_Template.xlsx';
-           document.body.appendChild(a);
-           a.click();
-           a.remove();
-        }}>Download Template</Button>
+        <Popover>
+          <PopoverTrigger render={<Button variant="outline" size="sm" />}>
+            <Download size={14} className="mr-1" /> Downloads <ChevronDown size={13} className="ml-1 opacity-60" />
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-60 p-1">
+            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Excel</div>
+            <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground" onClick={() => downloadAsset('templates/Lineage_Canvas_Template.xlsx', 'Lineage_Canvas_Template.xlsx')}>
+              <FileSpreadsheet size={14} className="text-emerald-600" /> Excel template
+            </button>
+            <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground" onClick={() => downloadAsset('templates/Lineage_Canvas_Sample_Filled.xlsx', 'Lineage_Canvas_Sample_Filled.xlsx')}>
+              <FileSpreadsheet size={14} className="text-emerald-600/70" /> Filled sample
+            </button>
+            <div className="mt-1 border-t pt-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI extraction (JSON)</div>
+            <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground" onClick={() => downloadAsset('extraction/lineage-extract.schema.json', 'lineage-extract.schema.json')}>
+              <FileJson size={14} className="text-amber-600" /> JSON schema
+            </button>
+            <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground" onClick={() => downloadAsset('extraction/prompt-sas.md', 'prompt-sas.md')}>
+              <FileText size={14} className="text-blue-600" /> Prompt — SAS
+            </button>
+            <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground" onClick={() => downloadAsset('extraction/prompt-sql.md', 'prompt-sql.md')}>
+              <FileText size={14} className="text-blue-600" /> Prompt — SQL
+            </button>
+            <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground" onClick={() => downloadAsset('extraction/prompt-snowflake.md', 'prompt-snowflake.md')}>
+              <FileText size={14} className="text-blue-600" /> Prompt — Snowflake
+            </button>
+          </PopoverContent>
+        </Popover>
 
         <label className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap rounded-lg text-[0.8rem] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-7 px-2.5">
           Upload Excel
@@ -134,22 +170,12 @@ export function Header() {
              const file = e.target.files?.[0];
              if (file) {
                 try {
-                  const { processExcelUpload } = await import('../lib/excelService');
-                  const result = await processExcelUpload(file, activeCanvasId);
-                  // The MASTER sheet may have created a new project/canvas.
-                  await useStore.getState().loadProjects();
-                  await useStore.getState().selectCanvas(result.canvasId);
-                  const lines = [
-                    `Imported ${result.tables} table(s), ${result.tableEdges} table link(s), ${result.columnEdges} column link(s).`,
-                    ...result.warnings,
-                  ];
-                  if (result.tables === 0) {
-                    alert(`No tables imported. Add a table_name to the MASTER registry for each sheet you want to ingest.\n\n${result.warnings.join('\n')}`);
-                  } else if (result.warnings.length) {
-                    alert(`Excel imported with warnings:\n\n${lines.join('\n')}`);
-                  }
+                  const { parseExcelWorkbook } = await import('../lib/excelService');
+                  const { model, warnings } = await parseExcelWorkbook(file);
+                  if (warnings.length) alert(warnings.join('\n'));
+                  if (model.tables.length > 0) setPendingImport({ source: 'EXCEL', model, fileName: file.name });
                 } catch (err) {
-                  alert(`Excel upload failed: ${err instanceof Error ? err.message : String(err)}`);
+                  alert(`Excel parse failed: ${err instanceof Error ? err.message : String(err)}`);
                 }
              }
              e.target.value = '';
@@ -158,18 +184,31 @@ export function Header() {
 
         <label className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap rounded-lg text-[0.8rem] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-7 px-2.5">
           Upload JSON
-          <input type="file" className="hidden" accept=".json" disabled={!activeCanvasId} onChange={async (e) => {
+          <input type="file" className="hidden" accept=".json" onChange={async (e) => {
              const file = e.target.files?.[0];
-             if (file && activeCanvasId) {
-                const { processLineageUpload } = await import('../lib/uploadService');
-                await processLineageUpload(file, activeCanvasId);
-                reloadActiveCanvas();
+             if (file) {
+                try {
+                  const { parseLineageJSON } = await import('../lib/uploadService');
+                  const { model, rawPayload } = await parseLineageJSON(file);
+                  setPendingImport({ source: 'JSON', model, rawPayload, fileName: file.name });
+                } catch (err) {
+                  alert(`JSON parse failed: ${err instanceof Error ? err.message : String(err)}`);
+                }
              }
              e.target.value = '';
           }} />
         </label>
         <NewTableDialog />
       </div>
+
+      <ImportValidationDialog
+        open={!!pendingImport}
+        onOpenChange={(o) => { if (!o) setPendingImport(null); }}
+        source={pendingImport?.source ?? 'JSON'}
+        model={pendingImport?.model ?? null}
+        rawPayload={pendingImport?.rawPayload}
+        fileName={pendingImport?.fileName ?? ''}
+      />
     </header>
   );
 }

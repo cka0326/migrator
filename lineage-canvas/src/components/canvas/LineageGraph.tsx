@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from 'react';
+import { useEffect, useMemo, useCallback, useState } from 'react';
 import { ReactFlow, Controls, Background, useNodesState, useEdgesState, useReactFlow, BackgroundVariant } from '@xyflow/react';
 import type { Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -7,8 +7,10 @@ import { useStore } from '../../store/useStore';
 import { CustomTableNode } from './CustomTableNode';
 import { CustomTableEdge } from './CustomTableEdge';
 import { CustomColumnEdge } from './CustomColumnEdge';
+import { MergeTablesDialog } from '../MergeTablesDialog';
 import { getLayoutedElements } from '../../lib/layout';
 import { Button } from '../ui/button';
+import { GitMerge } from 'lucide-react';
 import type { System, TableEdge, ColumnEdge } from '../../types/models';
 
 const nodeTypes = { tableNode: CustomTableNode as any };
@@ -53,6 +55,12 @@ function SystemCanvas({ system }: SystemCanvasProps) {
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
+  const [mergeOpen, setMergeOpen] = useState(false);
+
+  const onSelectionChange = useCallback((params: any) => {
+    setSelectedNodeIds((params.nodes ?? []).map((n: any) => n.id));
+  }, []);
 
   // The store already holds only the active canvas's data; filter to this system tab.
   const systemNodes = useMemo(() => {
@@ -257,6 +265,7 @@ function SystemCanvas({ system }: SystemCanvasProps) {
         onEdgesDelete={onEdgesDelete}
         onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}
+        onSelectionChange={onSelectionChange}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         deleteKeyCode={['Backspace', 'Delete']}
@@ -267,11 +276,22 @@ function SystemCanvas({ system }: SystemCanvasProps) {
         <FocusCentering focusId={columnFocus?.datasetId ?? null} />
       </ReactFlow>
 
-      <div className="absolute top-3 right-4 z-10">
+      <div className="absolute top-3 right-4 z-10 flex items-center gap-2">
+        {selectedNodeIds.length >= 2 && (
+          <Button onClick={() => setMergeOpen(true)} variant="default" size="sm" className="shadow-sm">
+            <GitMerge size={13} className="mr-1" /> Merge {selectedNodeIds.length} tables
+          </Button>
+        )}
         <Button onClick={onLayout} variant="secondary" size="sm" className="shadow-sm border">
           Auto Layout
         </Button>
       </div>
+
+      <MergeTablesDialog
+        open={mergeOpen}
+        onOpenChange={(o) => setMergeOpen(o)}
+        sources={selectedNodeIds.map(id => storeNodes[id]).filter((n): n is NonNullable<typeof n> => !!n)}
+      />
 
       {columnFocus && (
         <div className="absolute top-3 left-4 z-10 flex items-center gap-2 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 shadow-sm">
