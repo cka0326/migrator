@@ -18,6 +18,9 @@ export function CustomTableNode({ data, id }: NodeProps<any>) {
     : (project?.targetSystemName || 'Target');
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [expanded, setExpanded] = useState(false);
+
+  const COLUMN_PREVIEW_LIMIT = 5;
 
   // Filter columns based on search query
   const filteredColumns = searchQuery.trim()
@@ -25,6 +28,14 @@ export function CustomTableNode({ data, id }: NodeProps<any>) {
         col.name.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : columns;
+
+  const sortedColumns = [...(filteredColumns || [])].sort((a: any, b: any) => a.name.localeCompare(b.name));
+  const isSearching = searchQuery.trim() !== '';
+  // Show a compact preview of the first few columns; expand on demand. While the
+  // user is actively filtering, always show every match.
+  const showAllColumns = expanded || isSearching;
+  const visibleColumns = showAllColumns ? sortedColumns : sortedColumns.slice(0, COLUMN_PREVIEW_LIMIT);
+  const hiddenColumnCount = sortedColumns.length - visibleColumns.length;
 
   return (
     <div
@@ -38,9 +49,13 @@ export function CustomTableNode({ data, id }: NodeProps<any>) {
       {/* Header */}
       <div className="p-2 border-b bg-muted/50 rounded-t-md cursor-pointer flex flex-col gap-1">
         <div className="flex justify-between items-start">
-          <div className="flex flex-col">
+          <div className="flex flex-col min-w-0">
             <span className="text-xs text-muted-foreground">{namespace}</span>
             <span className="font-semibold text-sm leading-tight break-all">{name}</span>
+            <span className="text-[10px] text-muted-foreground mt-0.5">
+              {columns.length} {columns.length === 1 ? 'column' : 'columns'}
+              {metadata?.rowCount != null && ` · ${Number(metadata.rowCount).toLocaleString()} rows`}
+            </span>
           </div>
           <Badge variant={system === 'LEGACY' ? 'default' : 'secondary'} className="text-[10px] px-1 py-0">{systemLabel}</Badge>
         </div>
@@ -73,8 +88,8 @@ export function CustomTableNode({ data, id }: NodeProps<any>) {
 
       {/* Columns */}
       {!collapsed && columns && columns.length > 0 && filteredColumns.length > 0 && (
-        <div className={`flex flex-col text-xs font-mono bg-background rounded-b-md ${filteredColumns.length > 6 ? 'max-h-[240px] overflow-y-auto' : ''}`}>
-          {[...(filteredColumns || [])].sort((a: any, b: any) => a.name.localeCompare(b.name)).map((col: any) => (
+        <div className={`flex flex-col text-xs font-mono bg-background rounded-b-md ${visibleColumns.length > 6 ? 'max-h-[240px] overflow-y-auto' : ''}`}>
+          {visibleColumns.map((col: any) => (
             <div key={col.name} className="relative flex justify-between items-center py-1.5 px-2 border-b last:border-0 group hover:bg-muted/50">
                <Handle
                  type="target"
@@ -92,6 +107,22 @@ export function CustomTableNode({ data, id }: NodeProps<any>) {
                />
             </div>
           ))}
+          {!showAllColumns && hiddenColumnCount > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
+              className="py-1.5 px-2 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border-t text-center"
+            >
+              +{hiddenColumnCount} more {hiddenColumnCount === 1 ? 'column' : 'columns'}
+            </button>
+          )}
+          {expanded && !isSearching && sortedColumns.length > COLUMN_PREVIEW_LIMIT && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
+              className="py-1.5 px-2 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border-t text-center"
+            >
+              Show less
+            </button>
+          )}
         </div>
       )}
       {!collapsed && columns.length === 0 && (
