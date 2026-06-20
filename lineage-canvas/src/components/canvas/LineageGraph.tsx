@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useCallback } from 'react';
-import { ReactFlow, Controls, Background, useNodesState, useEdgesState, BackgroundVariant } from '@xyflow/react';
+import { ReactFlow, Controls, Background, useNodesState, useEdgesState, useReactFlow, BackgroundVariant } from '@xyflow/react';
 import type { Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -14,6 +14,21 @@ import type { System, TableEdge, ColumnEdge } from '../../types/models';
 const nodeTypes = { tableNode: CustomTableNode as any };
 const edgeTypes = { tableEdge: CustomTableEdge as any, columnEdge: CustomColumnEdge as any };
 
+// Pans/centers the viewport on the focused node whenever the column focus changes,
+// so re-rooting the trace on a downstream/upstream column brings it into view.
+function FocusCentering({ focusId }: { focusId: string | null }) {
+  const { getNode, getZoom, setCenter } = useReactFlow();
+  useEffect(() => {
+    if (!focusId) return;
+    const node = getNode(focusId);
+    if (!node) return;
+    const w = (node.measured?.width ?? node.width ?? 280);
+    const h = (node.measured?.height ?? node.height ?? 120);
+    setCenter(node.position.x + w / 2, node.position.y + h / 2, { zoom: getZoom(), duration: 500 });
+  }, [focusId, getNode, getZoom, setCenter]);
+  return null;
+}
+
 interface SystemCanvasProps {
   system: System;
 }
@@ -23,6 +38,10 @@ function SystemCanvas({ system }: SystemCanvasProps) {
   const storeTableEdges = useStore(state => state.tableEdges);
   const storeColumnEdges = useStore(state => state.columnEdges);
   const activeCanvasId = useStore(state => state.activeCanvasId);
+
+  const columnFocus = useStore(state => state.columnFocus);
+  const tracedColumns = useStore(state => state.tracedColumns);
+  const clearColumnFocus = useStore(state => state.clearColumnFocus);
 
   const updateTableNodePosition = useStore(state => state.updateTableNodePosition);
   const updateTableNodePositions = useStore(state => state.updateTableNodePositions);
@@ -102,7 +121,13 @@ function SystemCanvas({ system }: SystemCanvasProps) {
   }, [systemNodes]);
 
   const initialEdges = useMemo(() => {
-    const tableFlowEdges: Edge[] = systemTableEdges.map(e => ({
+    const isFocusMode = !!columnFocus;
+    const isTraced = (datasetId: string, column: string) =>
+      !!tracedColumns[datasetId]?.includes(column);
+
+    // While tracing a column's lineage, hide table-level edges so only the
+    // column lineage is shown.
+    const tableFlowEdges: Edge[] = isFocusMode ? [] : systemTableEdges.map(e => ({
       id: e.edgeId,
       source: e.fromDataset,
       target: e.toDataset,
@@ -116,23 +141,31 @@ function SystemCanvas({ system }: SystemCanvasProps) {
       // Only render sources that live in this system tab; a cross-system source
       // (e.g. a LEGACY column feeding a TARGET column) has no node here, and an
       // edge pointing at a missing node makes React Flow / ELK thrash.
-      e.sources.filter(src => storeNodes[src.datasetId]?.system === system).map((src, i) => {
-        const isSourceCollapsed = storeNodes[src.datasetId]?.collapsed;
-        const isTargetCollapsed = storeNodes[e.target.datasetId]?.collapsed;
-        return {
-          id: `${e.edgeId}-${i}`,
-          source: src.datasetId,
-          target: e.target.datasetId,
-          sourceHandle: isSourceCollapsed ? 'table-source' : `col-${src.column}-source`,
-          targetHandle: isTargetCollapsed ? 'table-target' : `col-${e.target.column}-target`,
-          type: 'columnEdge',
-          data: e as any,
-        };
-      })
+      e.sources
+        .filter(src => storeNodes[src.datasetId]?.system === system)
+        // In focus mode only keep edges whose endpoints are both on the lineage.
+        .filter(src => !isFocusMode || (isTraced(src.datasetId, src.column) && isTraced(e.target.datasetId, e.target.column)))
+        .map((src, i) => {
+          const isSourceCollapsed = storeNodes[src.datasetId]?.collapsed;
+          const isTargetCollapsed = storeNodes[e.target.datasetId]?.collapsed;
+          // In focus mode every traced node renders its columns, so always anchor
+          // to the column handles (ignore the collapsed flag).
+          const useColHandles = isFocusMode;
+          return {
+            id: `${e.edgeId}-${i}`,
+            source: src.datasetId,
+            target: e.target.datasetId,
+            sourceHandle: (!useColHandles && isSourceCollapsed) ? 'table-source' : `col-${src.column}-source`,
+            targetHandle: (!useColHandles && isTargetCollapsed) ? 'table-target' : `col-${e.target.column}-target`,
+            type: 'columnEdge',
+            animated: isFocusMode,
+            data: e as any,
+          };
+        })
     );
 
     return [...tableFlowEdges, ...columnFlowEdges];
-  }, [systemTableEdges, systemColumnEdges, storeNodes]);
+  }, [systemTableEdges, systemColumnEdges, storeNodes, columnFocus, tracedColumns, system]);
 
   useEffect(() => {
     setNodes(initialNodes as any);
@@ -231,6 +264,7 @@ function SystemCanvas({ system }: SystemCanvasProps) {
       >
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#cbd5e1" />
         <Controls />
+        <FocusCentering focusId={columnFocus?.datasetId ?? null} />
       </ReactFlow>
 
       <div className="absolute top-3 right-4 z-10">
@@ -238,6 +272,17 @@ function SystemCanvas({ system }: SystemCanvasProps) {
           Auto Layout
         </Button>
       </div>
+
+      {columnFocus && (
+        <div className="absolute top-3 left-4 z-10 flex items-center gap-2 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 shadow-sm">
+          <span className="text-xs text-blue-900">
+            Tracing lineage for <span className="font-mono font-semibold">{columnFocus.column}</span>
+          </span>
+          <Button onClick={() => clearColumnFocus()} variant="ghost" size="sm" className="h-6 px-2 text-xs text-blue-700 hover:bg-blue-100">
+            Exit
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
