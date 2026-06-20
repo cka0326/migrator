@@ -111,7 +111,7 @@ export function NewTableDialog() {
             <Label>Table Name</Label>
             <Input required value={name} onChange={e => setName(e.target.value)} placeholder="e.g., CUSTOMERS" />
           </div>
-          <div className="text-sm text-muted-foreground p-2 bg-slate-100 rounded">
+          <div className="text-sm text-muted-foreground p-2 bg-slate-100 rounded break-all">
             <strong>ID:</strong> {datasetId}
             {isDuplicate && <p className="text-red-500 mt-1">A table with this ID already exists.</p>}
             <p className="mt-1 text-xs">Note: The system, namespace, and name are immutable after creation.</p>

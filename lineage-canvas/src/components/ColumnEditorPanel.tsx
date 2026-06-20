@@ -107,11 +107,11 @@ export function ColumnEditorPanel() {
     <div className="fixed top-0 right-[50vw] h-screen w-[35vw] bg-[#f5f5f5] border-l-2 border-[#cccccc] flex flex-col z-20 overflow-y-auto">
       {/* Header */}
       <div className="bg-gradient-to-b from-[#e8e8e8] to-[#d0d0d0] border-b-2 border-[#999999] px-3 py-2 sticky top-0 z-10">
-        <div className="flex items-center justify-between mb-2">
-          <span className="font-mono text-sm font-bold text-[#333333]">{column.name}</span>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="font-mono text-sm font-bold text-[#333333] truncate min-w-0">{column.name}</span>
           <Button
             onClick={handleClose}
-            className="h-5 w-5 p-0 bg-transparent hover:bg-[#cccccc] text-[#666666] hover:text-[#333333] border-0 rounded-none"
+            className="h-5 w-5 p-0 shrink-0 bg-transparent hover:bg-[#cccccc] text-[#666666] hover:text-[#333333] border-0 rounded-none"
           >
             <X size={14} />
           </Button>
@@ -142,11 +142,11 @@ export function ColumnEditorPanel() {
           </tr>
           <tr className="border-b border-[#dddddd]">
             <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] w-[130px] border-r border-[#dddddd]">Namespace</td>
-            <td className="px-2 py-1 font-mono text-[11px] text-[#333333]">{node?.namespace}</td>
+            <td className="px-2 py-1 font-mono text-[11px] text-[#333333] break-all">{node?.namespace}</td>
           </tr>
           <tr className="border-b border-[#dddddd]">
             <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Table Name</td>
-            <td className="px-2 py-1 font-mono text-[11px] text-[#333333]">{node?.name}</td>
+            <td className="px-2 py-1 font-mono text-[11px] text-[#333333] break-all">{node?.name}</td>
           </tr>
 
           {/* General */}

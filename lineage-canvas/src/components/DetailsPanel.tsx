@@ -99,11 +99,11 @@ export function DetailsPanel() {
               </tr>
               <tr className="border-b border-[#dddddd]">
                 <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] w-[130px] border-r border-[#dddddd]">Namespace</td>
-                <td className="px-2 py-1 font-mono text-[11px] text-[#333333]">{node.namespace}</td>
+                <td className="px-2 py-1 font-mono text-[11px] text-[#333333] break-all">{node.namespace}</td>
               </tr>
               <tr className="border-b border-[#dddddd]">
                 <td className="px-2 py-1 bg-[#eeeeee] font-mono text-[11px] border-r border-[#dddddd]">Table Name</td>
-                <td className="px-2 py-1 font-mono text-[11px] text-[#333333]">{node.name}</td>
+                <td className="px-2 py-1 font-mono text-[11px] text-[#333333] break-all">{node.name}</td>
               </tr>
 
               <tr className="bg-gradient-to-b from-[#e0e0e0] to-[#d5d5d5]">
