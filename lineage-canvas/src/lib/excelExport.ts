@@ -24,6 +24,11 @@ function sanitizeSheetName(raw: string, used: Set<string>): string {
 const systemLabel = (node: TableNode, project?: Project) =>
   node.system === 'LEGACY' ? (project?.legacySystemName || 'Legacy') : (project?.targetSystemName || 'Target');
 
+// One workbook holds a whole canvas (both systems), so a bare table name can be
+// ambiguous — two tables may share a name across systems/namespaces. Qualify the
+// identity used for sheet names and MASTER connections: SYSTEM_NAMESPACE_TABLE.
+const qualifiedTableName = (node: TableNode) => `${node.system}_${node.namespace}_${node.name}`;
+
 /**
  * Build a workbook for one canvas: a MASTER registry + connections sheet, plus one
  * sheet per table. Returns the workbook (caller serializes / zips it).
@@ -36,15 +41,16 @@ export function buildCanvasWorkbook(
   project?: Project,
 ): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
-  const nameByDataset = new Map(nodes.map(n => [n.datasetId, n.name]));
+  const nameByDataset = new Map(nodes.map(n => [n.datasetId, qualifiedTableName(n)]));
 
   // ---- Per-table sheets + registry rows ----
   const usedSheetNames = new Set<string>(['MASTER', 'INSTRUCTIONS']);
   const registry: Aoa = [['sheet_name', 'table_name']];
 
   for (const node of nodes) {
-    const sheetName = sanitizeSheetName(node.name, usedSheetNames);
-    registry.push([sheetName, node.name]);
+    const tableName = qualifiedTableName(node);
+    const sheetName = sanitizeSheetName(tableName, usedSheetNames);
+    registry.push([sheetName, tableName]);
 
     const aoa: Aoa = [];
     for (const [k, v] of tableMetaRows(node)) aoa.push([k, v]);
