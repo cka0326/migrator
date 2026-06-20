@@ -232,9 +232,17 @@ async function resolveCanvas(project: Record<string, any>, fallbackCanvasId: str
  * sheets become tables (and their names); the MASTER connection sections
  * declare table- and column-level lineage between those tables. The MASTER
  * project section selects the project/canvas (created if missing).
- * Returns the canvasId the data was imported into.
+ * Returns a summary of what was ingested, plus any non-fatal warnings.
  */
-export async function processExcelUpload(file: File, fallbackCanvasId: string | null): Promise<string> {
+export interface ImportSummary {
+  canvasId: string;
+  tables: number;
+  tableEdges: number;
+  columnEdges: number;
+  warnings: string[];
+}
+
+export async function processExcelUpload(file: File, fallbackCanvasId: string | null): Promise<ImportSummary> {
   const data = await file.arrayBuffer();
   const wb = XLSX.read(data);
 
@@ -258,7 +266,15 @@ export async function processExcelUpload(file: File, fallbackCanvasId: string | 
     nameToDataset.set(tableName, datasetId);
   }
 
-  const resolveRef = (ref: any): string | undefined => nameToDataset.get(upper(ref));
+  const warnings: string[] = [];
+  const unresolved = new Set<string>();
+  const resolveRef = (ref: any): string | undefined => {
+    const name = upper(ref);
+    if (!name) return undefined;
+    const ds = nameToDataset.get(name);
+    if (!ds) unresolved.add(name);
+    return ds;
+  };
 
   const uploadId = uuidv4();
   const processRecs: ProcessRec[] = [];
@@ -315,7 +331,42 @@ export async function processExcelUpload(file: File, fallbackCanvasId: string | 
     });
   }
 
-  await db.transaction('rw', [db.processRecs, db.tableEdges, db.columnEdges, db.uploadRecs], async () => {
+  if (unresolved.size) {
+    warnings.push(`Connections referenced ${unresolved.size} table(s) not in the registry (skipped): ${[...unresolved].join(', ')}.`);
+  }
+
+  // Any column referenced by a connection but not listed in its table's grid is
+  // added as a stub so the lineage edge has something to attach to (mirrors the
+  // JSON ingestion path).
+  const referencedCols = new Map<string, Set<string>>();
+  for (const ce of columnEdges) {
+    const add = (dsId: string, col: string) => {
+      if (!referencedCols.has(dsId)) referencedCols.set(dsId, new Set());
+      referencedCols.get(dsId)!.add(col);
+    };
+    add(ce.target.datasetId, ce.target.column);
+    for (const s of ce.sources) add(s.datasetId, s.column);
+  }
+
+  await db.transaction('rw', [db.tableNodes, db.processRecs, db.tableEdges, db.columnEdges, db.uploadRecs], async () => {
+    let stubbedCols = 0;
+    for (const [datasetId, cols] of referencedCols) {
+      const node = await db.tableNodes.get(datasetId);
+      if (!node) continue;
+      const missing = [...cols].filter(c => !node.columns.some(existing => existing.name === c));
+      if (!missing.length) continue;
+      for (const name of missing) {
+        node.columns.push({
+          name, dataType: 'UNKNOWN', ordinal: node.columns.length + 1,
+          origin: 'EXCEL', metadata: {}, stats: {}, lastEditedBy: 'UPLOAD',
+        });
+        stubbedCols++;
+      }
+      node.updatedAt = new Date().toISOString();
+      await db.tableNodes.put(node);
+    }
+    if (stubbedCols) warnings.push(`Added ${stubbedCols} column(s) referenced by connections but missing from a table grid.`);
+
     if (processRecs.length) await db.processRecs.bulkPut(processRecs);
     if (tableEdges.length) await db.tableEdges.bulkPut(tableEdges);
     if (columnEdges.length) await db.columnEdges.bulkPut(columnEdges);
@@ -333,5 +384,5 @@ export async function processExcelUpload(file: File, fallbackCanvasId: string | 
     await db.uploadRecs.put(uploadRec);
   });
 
-  return canvasId;
+  return { canvasId, tables: nameToDataset.size, tableEdges: tableEdges.length, columnEdges: columnEdges.length, warnings };
 }

@@ -111,7 +111,10 @@ function SystemCanvas({ system }: SystemCanvasProps) {
     }));
 
     const columnFlowEdges: Edge[] = systemColumnEdges.flatMap(e =>
-      e.sources.map((src, i) => {
+      // Only render sources that live in this system tab; a cross-system source
+      // (e.g. a LEGACY column feeding a TARGET column) has no node here, and an
+      // edge pointing at a missing node makes React Flow / ELK thrash.
+      e.sources.filter(src => storeNodes[src.datasetId]?.system === system).map((src, i) => {
         const isSourceCollapsed = storeNodes[src.datasetId]?.collapsed;
         const isTargetCollapsed = storeNodes[e.target.datasetId]?.collapsed;
         return {

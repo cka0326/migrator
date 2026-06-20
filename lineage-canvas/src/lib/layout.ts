@@ -5,6 +5,11 @@ import type { TableNode } from '../types/models';
 const elk = new ELK();
 
 export async function getLayoutedElements(nodes: Node[], edges: Edge[]) {
+  // ELK throws on edges that reference a node it wasn't given; keep only edges
+  // whose endpoints are both present in this layout.
+  const nodeIds = new Set(nodes.map(n => n.id));
+  const layoutEdges = edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
+
   const graph: any = {
     id: 'root',
     layoutOptions: {
@@ -23,7 +28,7 @@ export async function getLayoutedElements(nodes: Node[], edges: Edge[]) {
         'elk.partitioning.partition': (n.data as unknown as TableNode).system === 'LEGACY' ? 0 : 1,
       }
     })),
-    edges: edges.map(e => ({
+    edges: layoutEdges.map(e => ({
       id: e.id,
       sources: [e.source],
       targets: [e.target]

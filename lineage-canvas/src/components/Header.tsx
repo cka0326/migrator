@@ -135,10 +135,19 @@ export function Header() {
              if (file) {
                 try {
                   const { processExcelUpload } = await import('../lib/excelService');
-                  const targetCanvasId = await processExcelUpload(file, activeCanvasId);
+                  const result = await processExcelUpload(file, activeCanvasId);
                   // The MASTER sheet may have created a new project/canvas.
                   await useStore.getState().loadProjects();
-                  await useStore.getState().selectCanvas(targetCanvasId);
+                  await useStore.getState().selectCanvas(result.canvasId);
+                  const lines = [
+                    `Imported ${result.tables} table(s), ${result.tableEdges} table link(s), ${result.columnEdges} column link(s).`,
+                    ...result.warnings,
+                  ];
+                  if (result.tables === 0) {
+                    alert(`No tables imported. Add a table_name to the MASTER registry for each sheet you want to ingest.\n\n${result.warnings.join('\n')}`);
+                  } else if (result.warnings.length) {
+                    alert(`Excel imported with warnings:\n\n${lines.join('\n')}`);
+                  }
                 } catch (err) {
                   alert(`Excel upload failed: ${err instanceof Error ? err.message : String(err)}`);
                 }
