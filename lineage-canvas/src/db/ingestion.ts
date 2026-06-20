@@ -113,30 +113,52 @@ export async function ingestLineageJSON(fileContent: string, fileName: string, c
     }));
     if (processRecs.length > 0) await db.processRecs.bulkAdd(processRecs);
 
-    // 3. Create TableEdges
-    const tableEdges: TableEdge[] = data.table_edges.map(te => ({
-      edgeId: `${canvasId}::${te.edge_id}`,
-      canvasId,
-      uploadId,
-      fromDataset: scope(te.from_dataset),
-      toDataset: scope(te.to_dataset),
-      processId: `${canvasId}::${te.process_id}`
-    }));
-    if (tableEdges.length > 0) await db.tableEdges.bulkAdd(tableEdges);
+    // 3. Create TableEdges.
+    // The edgeId is derived from the (scoped) endpoints rather than the payload's
+    // edge_id, so re-importing the same lineage maps to the same id and UPSERTS
+    // instead of creating a duplicate connection. We de-dupe within this batch and
+    // use bulkPut (not bulkAdd) so a repeated edge can never throw and abort the
+    // transaction. Existing edges are only ever added/updated here, never removed.
+    const tableEdgeMap = new Map<string, TableEdge>();
+    for (const te of data.table_edges) {
+      const fromDataset = scope(te.from_dataset);
+      const toDataset = scope(te.to_dataset);
+      const edgeId = `TE|${fromDataset}|${toDataset}`;
+      tableEdgeMap.set(edgeId, {
+        edgeId,
+        canvasId,
+        uploadId,
+        fromDataset,
+        toDataset,
+        processId: `${canvasId}::${te.process_id}`
+      });
+    }
+    const tableEdges = [...tableEdgeMap.values()];
+    if (tableEdges.length > 0) await db.tableEdges.bulkPut(tableEdges);
 
-    // 4. Create ColumnEdges
-    const columnEdges: ColumnEdge[] = data.column_edges.map(ce => ({
-      edgeId: `${canvasId}::${ce.edge_id}`,
-      canvasId,
-      uploadId,
-      target: { datasetId: scope(ce.target.dataset_id), column: ce.target.column },
-      sources: ce.sources.map((s: any) => ({ datasetId: scope(s.dataset_id), column: s.column })),
-      processId: `${canvasId}::${ce.process_id}`,
-      transformationType: ce.transformation_type as any,
-      expression: ce.expression,
-      confidence: ce.confidence as any
-    }));
-    if (columnEdges.length > 0) await db.columnEdges.bulkAdd(columnEdges);
+    // 4. Create ColumnEdges. Same idempotency approach: the id is derived from the
+    // target column plus the sorted source keys, so re-imports upsert rather than
+    // duplicate.
+    const columnEdgeMap = new Map<string, ColumnEdge>();
+    for (const ce of data.column_edges) {
+      const target = { datasetId: scope(ce.target.dataset_id), column: ce.target.column };
+      const sources = ce.sources.map((s: any) => ({ datasetId: scope(s.dataset_id), column: s.column }));
+      const sortedSourceKeys = sources.map(s => `${s.datasetId}::${s.column}`).sort().join(',');
+      const edgeId = `CE|${target.datasetId}::${target.column}|${sortedSourceKeys}`;
+      columnEdgeMap.set(edgeId, {
+        edgeId,
+        canvasId,
+        uploadId,
+        target,
+        sources,
+        processId: `${canvasId}::${ce.process_id}`,
+        transformationType: ce.transformation_type as any,
+        expression: ce.expression,
+        confidence: ce.confidence as any
+      });
+    }
+    const columnEdges = [...columnEdgeMap.values()];
+    if (columnEdges.length > 0) await db.columnEdges.bulkPut(columnEdges);
 
     // 5. Create UploadRec
     const uploadRec: UploadRec = {

@@ -225,9 +225,11 @@ You can build the lineage map incrementally by importing files. Re-importing is 
 
 > A pre-filled example, `Lineage_Canvas_Sample_Filled.xlsx`, ships in `public/templates/` — open it to see exactly how a small SAS → Snowflake migration is expressed.
 
-### Option B — JSON lineage extract (for automated tooling)
+### Option B — JSON lineage extract (for automated / AI tooling)
 
-If you generate lineage programmatically (e.g. by parsing SAS/SQL), export a JSON extract and click **Upload JSON**. The file is validated against a Zod schema (`src/schema/lineageSchema.ts`).
+If you generate lineage programmatically (e.g. by parsing SAS/SQL, or via an AI agent), export a JSON extract and click **Upload JSON**. The file is validated against a Zod schema (`src/schema/lineageSchema.ts`). Imports are **additive** — they add tables/columns/connections and never overwrite existing metadata or delete connections; re-importing the same file is idempotent.
+
+> **Extracting lineage from SAS/SQL with an AI agent?** See **[`EXTRACTION.md`](./EXTRACTION.md)** for the ready-to-use agent prompt, the JSON contract, identity rules, and a worked example.
 
 Minimal shape (`schema_version` must be `"1.0"`):
 

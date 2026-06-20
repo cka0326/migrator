@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lineage-canvas/schemas/lineage-extract-1.0.json",
+  "title": "Lineage Canvas — Lineage Extract (v1.0)",
+  "description": "The ONLY accepted shape for a lineage extract produced from a SAS/SQL script and loaded via the app's 'Upload JSON' button. The agent must output a SINGLE JSON object that validates against this schema and NOTHING else (no Markdown, no prose, no code fences). NUANCES THAT APPLY TO THE WHOLE DOCUMENT: (1) Import is strictly ADDITIVE and NON-DESTRUCTIVE — it can create new tables, append new columns, and add connections, but it NEVER overwrites existing table/column metadata and NEVER deletes tables, columns, or connections. So this format has no 'delete'/'rename existing' semantics; only describe what should EXIST. (2) IDENTITY: every table is identified by its `dataset_id`, which MUST be `<SYSTEM>:<NAMESPACE>.<NAME>` in UPPERCASE (e.g. 'LEGACY:SALES.CUSTOMERS'). To MERGE into a table that already exists you must reuse its EXACT system/namespace/name from the inventory you were given; any difference creates a separate (duplicate) table instead. Internally the app prefixes this with the canvas id, so you only ever provide the `<SYSTEM>:<NAMESPACE>.<NAME>` part. (3) UPPERCASE everything that is an identifier: system, namespace, table name, column names, and every dataset_id/column referenced in processes and edges — existing objects are stored uppercase, so matching avoids duplicates. (4) `edge_id` values are REQUIRED by this schema but are IGNORED for storage identity — the app derives its own content-based id from the endpoints, so re-importing the same lineage upserts (no duplicate connections); you do not need stable edge ids across runs. (5) All four arrays (datasets, processes, table_edges, column_edges) are optional — emit only what the script actually evidences. A table referenced by an edge but omitted from `datasets` is auto-created as a minimal STUB node. (6) Prefer HIGH-signal, defensible lineage; when a transformation or source cannot be determined, use transformation_type 'UNKNOWN' rather than guessing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "extract"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Schema version. MUST be exactly the string \"1.0\". Any other value is rejected by the importer."
+    },
+    "extract": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Provenance for this extraction run (one per uploaded file).",
+      "required": ["extract_id", "source_system", "source_file_name"],
+      "properties": {
+        "extract_id": {
+          "type": "string",
+          "description": "A unique id for this extraction run. Any non-empty string (e.g. the script name + an ISO timestamp)."
+        },
+        "source_system": {
+          "type": "string",
+          "enum": ["LEGACY", "TARGET"],
+          "description": "The PRIMARY system the script belongs to. A SAS script is the LEGACY side → use 'LEGACY'. Use 'TARGET' only if the file is the migration target (e.g. Snowflake SQL). Note: individual datasets can still set their own `system` (a SAS script may create a TARGET-side structure), this field is just the file's default/primary system."
+        },
+        "source_file_name": {
+          "type": "string",
+          "description": "The originating file name. RECOMMENDED to make it unique per run (e.g. append a timestamp like 'build_summary.sas@2026-06-20T10:00:00Z') so the in-app Upload History stays readable. Re-uploading the same name is safe and additive (it does NOT supersede a prior upload)."
+        },
+        "default_namespace": {
+          "type": "string",
+          "description": "Optional fallback namespace (SAS libref / SQL schema), UPPERCASE, used only as a hint. Each dataset still declares its own `namespace`."
+        },
+        "generated_by": {
+          "type": "string",
+          "description": "Optional label for the tool/agent that produced this extract."
+        },
+        "generated_at": {
+          "type": "string",
+          "description": "Optional ISO-8601 timestamp of when the extract was produced."
+        }
+      }
+    },
+    "datasets": {
+      "type": "array",
+      "description": "Tables/datasets the script reads or writes, with their columns. Optional — but include every table you can describe so new tables/columns are created with real names instead of bare stubs. Existing tables only GAIN new columns; their existing columns and metadata are untouched.",
+      "items": { "$ref": "#/$defs/dataset" }
+    },
+    "processes": {
+      "type": "array",
+      "description": "The transformation steps (one per DATA step / PROC SQL / CTAS, etc.). Optional but recommended — they carry useful provenance (source file, line range, snippet) and tie inputs to outputs.",
+      "items": { "$ref": "#/$defs/process" }
+    },
+    "table_edges": {
+      "type": "array",
+      "description": "Table-to-table flow edges. Emit one per (input dataset → output dataset) relationship a step establishes.",
+      "items": { "$ref": "#/$defs/tableEdge" }
+    },
+    "column_edges": {
+      "type": "array",
+      "description": "Column-to-column lineage edges. Emit one per output column, listing the source column(s) it derives from. This is the highest-value output — be precise.",
+      "items": { "$ref": "#/$defs/columnEdge" }
+    }
+  },
+  "$defs": {
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dataset_id", "system", "namespace", "name", "qualified_name"],
+      "properties": {
+        "dataset_id": {
+          "type": "string",
+          "pattern": "^(LEGACY|TARGET):[A-Z0-9_$]+(\\.[A-Z0-9_$]+)+$",
+          "description": "Canonical identity: `<SYSTEM>:<NAMESPACE>.<NAME>` in UPPERCASE (e.g. 'LEGACY:SALES.CUSTOMERS', or 'TARGET:ANALYTICS.PUBLIC.CUSTOMER_SUMMARY' when the namespace itself is dotted like DATABASE.SCHEMA). MUST equal `system + ':' + namespace + '.' + name`. Reuse the EXACT identity of an existing table (from the supplied inventory) to merge into it; otherwise a new table is created.",
+          "examples": ["LEGACY:SALES.CUSTOMERS", "TARGET:ANALYTICS.PUBLIC.CUSTOMER_SUMMARY"]
+        },
+        "system": {
+          "type": "string",
+          "enum": ["LEGACY", "TARGET"],
+          "description": "Which lane this table lives in. SAS datasets → 'LEGACY'; Snowflake (or other target) structures → 'TARGET'."
+        },
+        "namespace": {
+          "type": "string",
+          "description": "SAS libref or SQL schema (DATABASE.SCHEMA), UPPERCASE. Must match the namespace embedded in `dataset_id`."
+        },
+        "name": {
+          "type": "string",
+          "description": "Table/dataset name, UPPERCASE. Must match the name embedded in `dataset_id`."
+        },
+        "qualified_name": {
+          "type": "string",
+          "description": "UPPERCASE `<NAMESPACE>.<NAME>` (the dataset_id without the system prefix), e.g. 'SALES.CUSTOMERS'."
+        },
+        "columns": {
+          "type": "array",
+          "description": "Columns of this table. Optional, but provide every column you can infer (definitions and any column referenced by a column_edge). Existing columns are preserved; only NEW column names are appended (matched case-sensitively against existing UPPERCASE names).",
+          "items": { "$ref": "#/$defs/column" }
+        }
+      }
+    },
+    "column": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "data_type"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Column name, UPPERCASE. Must match existing spelling to avoid creating a duplicate column."
+        },
+        "data_type": {
+          "type": "string",
+          "description": "Logical/physical type as written in the source (e.g. 'NUMBER', 'VARCHAR', 'CHAR', 'DATE', 'NUMERIC(18,2)'). Use 'UNKNOWN' if the script does not reveal it. Cross-system type equivalence (SAS/Snowflake/PySpark/Pandas) is handled by the app's comparison layer, so do not normalize — record what the source says."
+        },
+        "ordinal": {
+          "type": "integer",
+          "description": "Optional 1-based column position. Only applied to NEWLY created columns; never reorders existing ones."
+        }
+      }
+    },
+    "process": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["process_id", "operation_type", "source_file", "inputs", "outputs"],
+      "properties": {
+        "process_id": {
+          "type": "string",
+          "description": "Local id for this step, unique within this extract (e.g. 'p1'). Referenced by edges' `process_id`."
+        },
+        "operation_type": {
+          "type": "string",
+          "description": "Free-text category of the step, e.g. 'SAS_DATA_STEP', 'SAS_PROC_SQL', 'SAS_PROC_SORT', 'SF_CTAS', 'SQL_INSERT_SELECT'. Be consistent."
+        },
+        "source_file": {
+          "type": "string",
+          "description": "The script file this step came from."
+        },
+        "inputs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "dataset_ids this step READS (same `<SYSTEM>:<NAMESPACE>.<NAME>` UPPERCASE format)."
+        },
+        "outputs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "dataset_ids this step WRITES (same format)."
+        },
+        "sequence": {
+          "type": "integer",
+          "description": "Optional execution order within the script (1-based)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional human-readable step name. Defaults to process_id if omitted."
+        },
+        "code_location": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Optional source line range for the step.",
+          "properties": {
+            "start_line": { "type": ["integer", "null"], "description": "1-based start line, or null." },
+            "end_line": { "type": ["integer", "null"], "description": "1-based end line, or null." }
+          }
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional short prose describing what the step does."
+        },
+        "snippet": {
+          "type": "string",
+          "description": "Optional verbatim code snippet for the step (keep it short)."
+        }
+      }
+    },
+    "tableEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["edge_id", "from_dataset", "to_dataset", "process_id"],
+      "properties": {
+        "edge_id": {
+          "type": "string",
+          "description": "Local id for this edge (e.g. 'te1'). REQUIRED but IGNORED for storage identity — the app derives a content-based id from from_dataset+to_dataset, so re-imports upsert instead of duplicating."
+        },
+        "from_dataset": {
+          "type": "string",
+          "description": "Upstream dataset_id (source of the flow), `<SYSTEM>:<NAMESPACE>.<NAME>` UPPERCASE."
+        },
+        "to_dataset": {
+          "type": "string",
+          "description": "Downstream dataset_id (target of the flow), same format."
+        },
+        "process_id": {
+          "type": "string",
+          "description": "The `process_id` of the step that establishes this flow."
+        }
+      }
+    },
+    "columnEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["edge_id", "target", "sources", "process_id", "transformation_type"],
+      "properties": {
+        "edge_id": {
+          "type": "string",
+          "description": "Local id for this edge (e.g. 'ce1'). REQUIRED but IGNORED for storage identity — the app derives a content-based id from the target column + sorted source columns, so re-imports upsert instead of duplicating."
+        },
+        "target": {
+          "$ref": "#/$defs/columnEndpoint",
+          "description": "The OUTPUT column produced by the step."
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/columnEndpoint" },
+          "description": "The INPUT column(s) the target derives from. One entry for a direct/renamed/cast mapping; multiple for expressions/aggregations that combine columns. Use an empty-ish CONSTANT case only when there is genuinely no source — but `sources` must contain at least one entry, so for constants point at the most relevant driving column or omit the edge."
+        },
+        "process_id": {
+          "type": "string",
+          "description": "The `process_id` of the step that produces the target column."
+        },
+        "transformation_type": {
+          "type": "string",
+          "enum": ["DIRECT", "RENAME", "CAST", "EXPRESSION", "AGGREGATION", "WINDOW", "CASE", "CONSTANT", "UNKNOWN"],
+          "description": "How the target is derived: DIRECT = copied unchanged; RENAME = copied under a new name; CAST = type conversion only; EXPRESSION = scalar function/arithmetic; AGGREGATION = SUM/COUNT/AVG/etc.; WINDOW = windowed/analytic function; CASE = conditional logic; CONSTANT = literal value; UNKNOWN = cannot determine. Prefer the most specific accurate type; use UNKNOWN rather than guessing."
+        },
+        "expression": {
+          "type": "string",
+          "description": "Optional source expression/formula for the derivation (e.g. 'upper(c.cust_name)', 'sum(o.amount)')."
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["HIGH", "MEDIUM", "LOW"],
+          "description": "Optional confidence in this mapping. HIGH for explicit/direct mappings; MEDIUM/LOW when inferred (e.g. via SELECT * or ambiguous joins)."
+        }
+      }
+    },
+    "columnEndpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dataset_id", "column"],
+      "properties": {
+        "dataset_id": {
+          "type": "string",
+          "description": "dataset_id of the table this column belongs to, `<SYSTEM>:<NAMESPACE>.<NAME>` UPPERCASE."
+        },
+        "column": {
+          "type": "string",
+          "description": "Column name, UPPERCASE."
+        }
+      }
+    }
+  }
+}
