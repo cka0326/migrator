@@ -8,12 +8,12 @@ import { ProjectSidebar } from './components/ProjectSidebar';
 import { CompareView } from './components/compare/CompareView';
 
 function App() {
-  const loadProjects = useStore(state => state.loadProjects);
+  const initSession = useStore(state => state.initSession);
   const view = useStore(state => state.view);
 
   useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
+    initSession();
+  }, [initSession]);
 
   return (
     <div className="flex h-screen w-screen bg-slate-50 overflow-hidden text-left">
