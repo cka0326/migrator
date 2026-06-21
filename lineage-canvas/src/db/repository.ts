@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { db } from './database';
-import type { TableNode, UploadRec, EditEvent, Project, Canvas, SavedComparison } from '../types/models';
+import type { TableNode, UploadRec, EditEvent, Project, Canvas, SavedComparison, TableMapping, SavedDashboard } from '../types/models';
 
 export const Repository = {
   // ---------- Projects ----------
@@ -26,6 +26,7 @@ export const Repository = {
       await Repository.deleteCanvas(c.id);
     }
     await db.comparisons.where('projectId').equals(projectId).delete();
+    await db.dashboards.where('projectId').equals(projectId).delete();
     await db.projects.delete(projectId);
   },
 
@@ -44,6 +45,36 @@ export const Repository = {
 
   async deleteComparison(id: string) {
     await db.comparisons.delete(id);
+  },
+
+  // ---------- Canvas table mappings (legacy ↔ target) ----------
+  async getTableMappingsByCanvas(canvasId: string) {
+    return db.tableMappings.where('canvasId').equals(canvasId).toArray();
+  },
+
+  async saveTableMapping(mapping: TableMapping) {
+    await db.tableMappings.put(mapping);
+  },
+
+  async deleteTableMapping(id: string) {
+    await db.tableMappings.delete(id);
+  },
+
+  // ---------- Saved dashboards (top-level) ----------
+  async getAllDashboards() {
+    return db.dashboards.toArray();
+  },
+
+  async getDashboard(id: string) {
+    return db.dashboards.get(id);
+  },
+
+  async saveDashboard(dashboard: SavedDashboard) {
+    await db.dashboards.put(dashboard);
+  },
+
+  async deleteDashboard(id: string) {
+    await db.dashboards.delete(id);
   },
 
   // ---------- Canvases ----------
@@ -65,13 +96,14 @@ export const Repository = {
 
   async deleteCanvas(canvasId: string) {
     await db.transaction('rw',
-      [db.canvases, db.tableNodes, db.tableEdges, db.columnEdges, db.processRecs, db.uploadRecs],
+      [db.canvases, db.tableNodes, db.tableEdges, db.columnEdges, db.processRecs, db.uploadRecs, db.tableMappings],
       async () => {
         await db.tableNodes.where('canvasId').equals(canvasId).delete();
         await db.tableEdges.where('canvasId').equals(canvasId).delete();
         await db.columnEdges.where('canvasId').equals(canvasId).delete();
         await db.processRecs.where('canvasId').equals(canvasId).delete();
         await db.uploadRecs.where('canvasId').equals(canvasId).delete();
+        await db.tableMappings.where('canvasId').equals(canvasId).delete();
         await db.canvases.delete(canvasId);
       });
   },
@@ -101,12 +133,13 @@ export const Repository = {
   // scoped ids. datasetIds/processIds are "${canvasId}::..." so a prefix swap
   // re-scopes them; edgeIds and uploadIds are regenerated to stay globally unique.
   async copyCanvasContents(oldCanvasId: string, newCanvasId: string) {
-    const [nodes, tEdges, cEdges, procs, uploads] = await Promise.all([
+    const [nodes, tEdges, cEdges, procs, uploads, mappings] = await Promise.all([
       db.tableNodes.where('canvasId').equals(oldCanvasId).toArray(),
       db.tableEdges.where('canvasId').equals(oldCanvasId).toArray(),
       db.columnEdges.where('canvasId').equals(oldCanvasId).toArray(),
       db.processRecs.where('canvasId').equals(oldCanvasId).toArray(),
       db.uploadRecs.where('canvasId').equals(oldCanvasId).toArray(),
+      db.tableMappings.where('canvasId').equals(oldCanvasId).toArray(),
     ]);
 
     const prefix = `${oldCanvasId}::`;
@@ -159,14 +192,26 @@ export const Repository = {
       canvasId: newCanvasId,
     }));
 
+    // Mappings: fresh id, re-scope the canvas + dataset prefixes; column pairs (names)
+    // carry over verbatim since the copied tables keep the same column names.
+    const newMappings = mappings.map(m => ({
+      ...m,
+      id: uuidv4(),
+      canvasId: newCanvasId,
+      legacyDatasetId: swap(m.legacyDatasetId),
+      targetDatasetId: swap(m.targetDatasetId),
+      columnMappings: m.columnMappings.map(cp => ({ ...cp })),
+    }));
+
     await db.transaction('rw',
-      [db.tableNodes, db.tableEdges, db.columnEdges, db.processRecs, db.uploadRecs],
+      [db.tableNodes, db.tableEdges, db.columnEdges, db.processRecs, db.uploadRecs, db.tableMappings],
       async () => {
         if (newNodes.length) await db.tableNodes.bulkPut(newNodes);
         if (newTEdges.length) await db.tableEdges.bulkPut(newTEdges);
         if (newCEdges.length) await db.columnEdges.bulkPut(newCEdges);
         if (newProcs.length) await db.processRecs.bulkPut(newProcs);
         if (newUploads.length) await db.uploadRecs.bulkPut(newUploads);
+        if (newMappings.length) await db.tableMappings.bulkPut(newMappings);
       });
   },
 
@@ -242,6 +287,7 @@ export const Repository = {
     project: Project;
     canvases: Canvas[];
     comparisons: SavedComparison[];
+    tableMappings: TableMapping[];
     tableNodes: any[];
     tableEdges: any[];
     columnEdges: any[];
@@ -249,11 +295,12 @@ export const Repository = {
     uploadRecs: any[];
   }) {
     await db.transaction('rw',
-      [db.projects, db.canvases, db.comparisons, db.tableNodes, db.tableEdges, db.columnEdges, db.processRecs, db.uploadRecs],
+      [db.projects, db.canvases, db.comparisons, db.tableMappings, db.tableNodes, db.tableEdges, db.columnEdges, db.processRecs, db.uploadRecs],
       async () => {
         await db.projects.put(g.project);
         if (g.canvases.length) await db.canvases.bulkPut(g.canvases);
         if (g.comparisons.length) await db.comparisons.bulkPut(g.comparisons);
+        if (g.tableMappings.length) await db.tableMappings.bulkPut(g.tableMappings);
         if (g.tableNodes.length) await db.tableNodes.bulkPut(g.tableNodes);
         if (g.tableEdges.length) await db.tableEdges.bulkPut(g.tableEdges);
         if (g.columnEdges.length) await db.columnEdges.bulkPut(g.columnEdges);
@@ -288,6 +335,32 @@ export const Repository = {
         await addMissing(db.tableEdges, g.tableEdges, 'edgeId');
         await addMissing(db.columnEdges, g.columnEdges, 'edgeId');
         await db.comparisons.put(g.comparison);
+      });
+  },
+
+  // A dashboard bundle keeps original ids: insert any referenced projects/canvases/
+  // tables/mappings that are MISSING locally, then add the dashboard record itself.
+  async saveImportedDashboard(g: {
+    dashboard: SavedDashboard;
+    projects: Project[];
+    canvases: Canvas[];
+    tableNodes: any[];
+    tableMappings: TableMapping[];
+  }) {
+    const addMissing = async (table: any, rows: any[], key: string) => {
+      if (!rows.length) return;
+      const found = await table.bulkGet(rows.map(r => r[key]));
+      const toAdd = rows.filter((_, i) => !found[i]);
+      if (toAdd.length) await table.bulkPut(toAdd);
+    };
+    await db.transaction('rw',
+      [db.projects, db.canvases, db.tableNodes, db.tableMappings, db.dashboards],
+      async () => {
+        await addMissing(db.projects, g.projects, 'id');
+        await addMissing(db.canvases, g.canvases, 'id');
+        await addMissing(db.tableNodes, g.tableNodes, 'datasetId');
+        await addMissing(db.tableMappings, g.tableMappings, 'id');
+        await db.dashboards.put(g.dashboard);
       });
   },
 

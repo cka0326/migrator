@@ -6,8 +6,9 @@ import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import {
   FolderPlus, Plus, ChevronRight, ChevronLeft, ChevronDown, Trash2, GitCompare, Layers, Pencil, Copy, Share2, Upload,
+  LayoutDashboard, BarChart3,
 } from 'lucide-react';
-import type { Project } from '../types/models';
+import type { Project, SavedDashboard } from '../types/models';
 
 function NewProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const createProject = useStore(state => state.createProject);
@@ -265,18 +266,74 @@ function ProjectItem({ project }: { project: Project }) {
   );
 }
 
+function DashboardItem({ dashboard }: { dashboard: SavedDashboard }) {
+  const projects = useStore(state => state.projects);
+  const view = useStore(state => state.view);
+  const activeDashboardId = useStore(state => state.activeDashboardId);
+  const openDashboard = useStore(state => state.openDashboard);
+  const deleteDashboard = useStore(state => state.deleteDashboard);
+  const saveDashboard = useStore(state => state.saveDashboard);
+  const exportDashboard = useStore(state => state.exportDashboard);
+
+  const isActive = view === 'dashboard' && activeDashboardId === dashboard.id;
+  const projectName = projects[dashboard.projectId]?.name ?? '(deleted project)';
+
+  return (
+    <div
+      className={`group/dash flex items-center gap-1.5 px-2 py-1.5 rounded cursor-pointer text-sm ${
+        isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 hover:bg-slate-100'
+      }`}
+      onClick={() => openDashboard(dashboard.id)}
+    >
+      <BarChart3 size={13} className="shrink-0 opacity-70" />
+      <div className="flex-1 min-w-0">
+        <div className="truncate">{dashboard.name}</div>
+        <div className="text-[10px] text-slate-400 truncate">{projectName} · {dashboard.scope === 'trend' ? 'trend' : 'snapshot'}</div>
+      </div>
+      <span className="flex items-center gap-0.5 opacity-0 group-hover/dash:opacity-100">
+        <button title="Export dashboard (.zip)" onClick={(e) => { e.stopPropagation(); exportDashboard(dashboard.id); }} className="p-0.5 text-slate-400 hover:text-primary">
+          <Share2 size={11} />
+        </button>
+        <button
+          title="Rename dashboard"
+          onClick={(e) => {
+            e.stopPropagation();
+            const n = window.prompt('Rename dashboard:', dashboard.name);
+            if (n && n.trim()) saveDashboard({ ...dashboard, name: n.trim(), updatedAt: new Date().toISOString() });
+          }}
+          className="p-0.5 text-slate-400 hover:text-slate-700"
+        >
+          <Pencil size={11} />
+        </button>
+        <button
+          title="Delete dashboard"
+          onClick={(e) => { e.stopPropagation(); if (confirm(`Delete dashboard "${dashboard.name}"?`)) deleteDashboard(dashboard.id); }}
+          className="p-0.5 text-slate-400 hover:text-red-600"
+        >
+          <Trash2 size={11} />
+        </button>
+      </span>
+    </div>
+  );
+}
+
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 500;
 const DEFAULT_WIDTH = 256;
 
 export function ProjectSidebar() {
   const projects = useStore(state => state.projects);
+  const dashboards = useStore(state => state.dashboards);
   const importProject = useStore(state => state.importProject);
   const importComparison = useStore(state => state.importComparison);
+  const importDashboard = useStore(state => state.importDashboard);
+  const openDashboard = useStore(state => state.openDashboard);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [tab, setTab] = useState<'projects' | 'dashboards'>('projects');
   const projectFileRef = useRef<HTMLInputElement>(null);
   const comparisonFileRef = useRef<HTMLInputElement>(null);
+  const dashboardFileRef = useRef<HTMLInputElement>(null);
 
   const runImport = async (file: File | undefined, fn: (f: File) => Promise<void>, kind: string) => {
     if (!file) return;
@@ -316,6 +373,7 @@ export function ProjectSidebar() {
   }, []);
 
   const projectList = Object.values(projects).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const dashboardList = Object.values(dashboards).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   // Collapsed: a slim rail with controls to reopen.
   if (collapsed) {
@@ -325,10 +383,13 @@ export function ProjectSidebar() {
         <button title="Expand sidebar" onClick={() => setCollapsed(false)} className="text-slate-500 hover:text-slate-800">
           <ChevronRight size={18} />
         </button>
-        <button title="New project" onClick={() => { setCollapsed(false); setNewProjectOpen(true); }} className="text-slate-500 hover:text-primary">
+        <button title="New project" onClick={() => { setCollapsed(false); setTab('projects'); setNewProjectOpen(true); }} className="text-slate-500 hover:text-primary">
           <FolderPlus size={16} />
         </button>
-        <span className="text-[10px] font-semibold tracking-wider text-slate-400 [writing-mode:vertical-rl] mt-1">PROJECTS</span>
+        <button title="Dashboards" onClick={() => { setCollapsed(false); setTab('dashboards'); }} className="text-slate-500 hover:text-primary">
+          <LayoutDashboard size={16} />
+        </button>
+        <span className="text-[10px] font-semibold tracking-wider text-slate-400 [writing-mode:vertical-rl] mt-1">DATATRACE</span>
         <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} />
       </aside>
     );
@@ -339,38 +400,90 @@ export function ProjectSidebar() {
       <div className="flex items-center gap-2 px-3 py-2.5 border-b">
         <img src="/logo.svg" alt="DataTrace" className="h-7 w-7 shrink-0" />
         <span className="text-base font-bold tracking-tight text-slate-800">DataTrace</span>
-      </div>
-      <div className="flex items-center justify-between px-3 py-3 border-b">
-        <h2 className="text-sm font-semibold tracking-tight text-slate-700">Projects</h2>
-        <div className="flex items-center gap-1">
-          <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setNewProjectOpen(true)}>
-            <FolderPlus size={14} className="mr-1" /> New
-          </Button>
-          <button title="Import project bundle (.zip)" disabled={importing} onClick={() => projectFileRef.current?.click()} className="p-1 text-slate-400 hover:text-primary disabled:opacity-50">
-            <Upload size={15} />
-          </button>
-          <button title="Import comparison bundle (.zip)" disabled={importing} onClick={() => comparisonFileRef.current?.click()} className="p-1 text-slate-400 hover:text-primary disabled:opacity-50">
-            <GitCompare size={15} />
-          </button>
-          <button title="Collapse sidebar" onClick={() => setCollapsed(true)} className="p-1 text-slate-400 hover:text-slate-700">
-            <ChevronLeft size={16} />
-          </button>
-        </div>
-        <input ref={projectFileRef} type="file" accept=".zip" className="hidden"
-          onChange={e => { runImport(e.target.files?.[0], importProject, 'Project'); e.target.value = ''; }} />
-        <input ref={comparisonFileRef} type="file" accept=".zip" className="hidden"
-          onChange={e => { runImport(e.target.files?.[0], importComparison, 'Comparison'); e.target.value = ''; }} />
+        <button title="Collapse sidebar" onClick={() => setCollapsed(true)} className="ml-auto p-1 text-slate-400 hover:text-slate-700">
+          <ChevronLeft size={16} />
+        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2">
-        {projectList.length === 0 ? (
-          <div className="text-center text-slate-400 text-xs py-10 px-4">
-            No projects yet.<br />Click <span className="font-medium">New</span> to create one.
-          </div>
-        ) : (
-          projectList.map(p => <ProjectItem key={p.id} project={p} />)
-        )}
+      {/* Top-level tab switch */}
+      <div className="flex items-center gap-1 px-2 pt-2">
+        <button
+          onClick={() => setTab('projects')}
+          className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium rounded-md ${tab === 'projects' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50'}`}
+        >
+          <Layers size={14} /> Projects
+        </button>
+        <button
+          onClick={() => setTab('dashboards')}
+          className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium rounded-md ${tab === 'dashboards' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50'}`}
+        >
+          <LayoutDashboard size={14} /> Dashboards
+        </button>
       </div>
+
+      {tab === 'projects' ? (
+        <>
+          <div className="flex items-center justify-between px-3 py-2 border-b mt-1">
+            <h2 className="text-sm font-semibold tracking-tight text-slate-700">Projects</h2>
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setNewProjectOpen(true)}>
+                <FolderPlus size={14} className="mr-1" /> New
+              </Button>
+              <button title="Import project bundle (.zip)" disabled={importing} onClick={() => projectFileRef.current?.click()} className="p-1 text-slate-400 hover:text-primary disabled:opacity-50">
+                <Upload size={15} />
+              </button>
+              <button title="Import comparison bundle (.zip)" disabled={importing} onClick={() => comparisonFileRef.current?.click()} className="p-1 text-slate-400 hover:text-primary disabled:opacity-50">
+                <GitCompare size={15} />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2">
+            {projectList.length === 0 ? (
+              <div className="text-center text-slate-400 text-xs py-10 px-4">
+                No projects yet.<br />Click <span className="font-medium">New</span> to create one.
+              </div>
+            ) : (
+              projectList.map(p => <ProjectItem key={p.id} project={p} />)
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex items-center justify-between px-3 py-2 border-b mt-1">
+            <h2 className="text-sm font-semibold tracking-tight text-slate-700">Dashboards</h2>
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openDashboard(null)} title="Open a new migration status dashboard">
+                <Plus size={14} className="mr-1" /> New
+              </Button>
+              <button title="Import dashboard bundle (.zip)" disabled={importing} onClick={() => dashboardFileRef.current?.click()} className="p-1 text-slate-400 hover:text-primary disabled:opacity-50">
+                <Upload size={15} />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+            <button
+              onClick={() => openDashboard(null)}
+              className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded text-sm text-slate-500 hover:bg-slate-100 border border-dashed border-slate-200"
+            >
+              <Plus size={13} /> New live dashboard
+            </button>
+            {dashboardList.length === 0 ? (
+              <div className="text-center text-slate-400 text-xs py-8 px-4">
+                No saved dashboards.<br />Open one and click <span className="font-medium">Save</span>.
+              </div>
+            ) : (
+              dashboardList.map(d => <DashboardItem key={d.id} dashboard={d} />)
+            )}
+          </div>
+        </>
+      )}
+
+      <input ref={projectFileRef} type="file" accept=".zip" className="hidden"
+        onChange={e => { runImport(e.target.files?.[0], importProject, 'Project'); e.target.value = ''; }} />
+      <input ref={comparisonFileRef} type="file" accept=".zip" className="hidden"
+        onChange={e => { runImport(e.target.files?.[0], importComparison, 'Comparison'); e.target.value = ''; }} />
+      <input ref={dashboardFileRef} type="file" accept=".zip" className="hidden"
+        onChange={e => { runImport(e.target.files?.[0], importDashboard, 'Dashboard'); e.target.value = ''; }} />
 
       <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} />
 

@@ -174,7 +174,41 @@ export interface EditEvent {             // append-only manual-edit log (§9)
   before?: unknown; after?: unknown;
 }
 
-export interface MigrationMapping {      // optional cross-lane link (§10)
-  id: string; sasDatasetId: string; snowflakeDatasetId: string;
-  status: "PROPOSED" | "VALIDATED" | "MISMATCH"; notes?: string;
+// ---------- Canvas-level migration mappings (legacy ↔ target) ----------
+// A durable, editable 1:1 correspondence between a LEGACY table and a TARGET table
+// within a single canvas, plus the column-level pairings inside it. Copied when a
+// canvas/project is duplicated, and kept in sync when tables/columns are renamed or
+// deleted (see useStore renameTable/renameColumn/deleteTableNode/removeColumn).
+export type ValidationState = "NOT_STARTED" | "IN_PROGRESS" | "VALIDATED" | "ISSUE";
+
+export interface ColumnMappingPair {
+  legacyColumn: string;          // column name within the legacy table
+  targetColumn: string;          // column name within the target table
+}
+
+export interface TableMapping {
+  id: string;                    // uuid
+  canvasId: string;              // owning canvas (IMMUTABLE)
+  legacyDatasetId: string;       // a LEGACY TableNode in this canvas
+  targetDatasetId: string;       // a TARGET TableNode in this canvas
+  columnMappings: ColumnMappingPair[];
+  validationState: ValidationState; // manual sign-off (status is also derived from the diff)
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------- Saved migration-status dashboards (top-level, outside projects) ----------
+// "canvas" = a single point-in-time snapshot; "trend" = progress across a project's
+// canvases over time. Referenced project/canvas may be deleted — render defensively.
+export type DashboardScope = "canvas" | "trend";
+
+export interface SavedDashboard {
+  id: string;                    // uuid
+  name: string;
+  scope: DashboardScope;
+  projectId: string;
+  canvasId?: string;             // required when scope === "canvas"
+  createdAt: string;
+  updatedAt: string;
 }

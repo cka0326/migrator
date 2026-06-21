@@ -2,7 +2,7 @@ import { useStore } from '../store/useStore';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { Undo2, Redo2, Search, Database, Download, ChevronDown, FileSpreadsheet, FileJson, FileText } from 'lucide-react';
+import { Undo2, Redo2, Search, Database, Download, ChevronDown, FileSpreadsheet, FileJson, FileText, GitCompareArrows } from 'lucide-react';
 import { NewTableDialog } from './NewTableDialog';
 import { UploadsRegistry } from './UploadsRegistry';
 import { ImportValidationDialog } from './ImportValidationDialog';
@@ -32,6 +32,7 @@ export function Header() {
 
   const nodes = useStore(state => state.nodes);
   const selectNode = useStore(state => state.selectNode);
+  const setView = useStore(state => state.setView);
   const activeCanvasId = useStore(state => state.activeCanvasId);
   const project = useStore(state => state.activeProjectId ? state.projects[state.activeProjectId] : null);
   const canvas = useStore(state => state.activeCanvasId ? state.canvases[state.activeCanvasId] : null);
@@ -136,6 +137,9 @@ export function Header() {
         </div>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
+        <Button variant="outline" size="sm" onClick={() => setView('mapping')} disabled={!activeCanvasId} title="Define legacy ↔ target table & column mappings for this canvas">
+          <GitCompareArrows size={14} className="mr-1" /> Mapping
+        </Button>
         <UploadsRegistry />
         <Popover>
           <PopoverTrigger render={<Button variant="outline" size="sm" />}>

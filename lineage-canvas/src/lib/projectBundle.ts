@@ -11,7 +11,7 @@ import { Repository } from '../db/repository';
 import { buildCanvasWorkbook, workbookToArrayBuffer } from './excelExport';
 import { downloadBlob, slugify } from './download';
 import type {
-  Project, Canvas, SavedComparison, TableNode, TableEdge, ColumnEdge, ProcessRec, UploadRec,
+  Project, Canvas, SavedComparison, TableMapping, TableNode, TableEdge, ColumnEdge, ProcessRec, UploadRec,
 } from '../types/models';
 
 interface ProjectBundle {
@@ -21,6 +21,7 @@ interface ProjectBundle {
   project: Project;
   canvases: Canvas[];
   comparisons: SavedComparison[];
+  tableMappings?: TableMapping[];   // optional: bundles exported before this field existed
   tableNodes: TableNode[];
   tableEdges: TableEdge[];
   columnEdges: ColumnEdge[];
@@ -55,26 +56,28 @@ export async function exportProjectBundle(projectId: string): Promise<void> {
   const columnEdges: ColumnEdge[] = [];
   const processRecs: ProcessRec[] = [];
   const uploadRecs: UploadRec[] = [];
+  const tableMappings: TableMapping[] = [];
   const nodesByCanvas = new Map<string, TableNode[]>();
   const tEdgesByCanvas = new Map<string, TableEdge[]>();
   const cEdgesByCanvas = new Map<string, ColumnEdge[]>();
 
   for (const c of canvases) {
-    const [n, te, ce, pr, up] = await Promise.all([
+    const [n, te, ce, pr, up, tm] = await Promise.all([
       Repository.getTableNodesByCanvas(c.id),
       Repository.getTableEdgesByCanvas(c.id),
       Repository.getColumnEdgesByCanvas(c.id),
       Repository.getProcessRecsByCanvas(c.id),
       Repository.getUploadsByCanvas(c.id),
+      Repository.getTableMappingsByCanvas(c.id),
     ]);
     nodesByCanvas.set(c.id, n); tEdgesByCanvas.set(c.id, te); cEdgesByCanvas.set(c.id, ce);
     tableNodes.push(...n); tableEdges.push(...te); columnEdges.push(...ce);
-    processRecs.push(...pr); uploadRecs.push(...up);
+    processRecs.push(...pr); uploadRecs.push(...up); tableMappings.push(...tm);
   }
 
   const bundle: ProjectBundle = {
     bundleType: 'project', version: 1, exportedAt: new Date().toISOString(),
-    project, canvases, comparisons, tableNodes, tableEdges, columnEdges, processRecs, uploadRecs,
+    project, canvases, comparisons, tableMappings, tableNodes, tableEdges, columnEdges, processRecs, uploadRecs,
   };
 
   const zip = new JSZip();
@@ -174,6 +177,15 @@ export async function importProjectBundle(file: File): Promise<string> {
 
   const uploadRecs = bundle.uploadRecs.map(u => ({ ...u, uploadId: mapUpload(u.uploadId), canvasId: newCanvas(u.canvasId) }));
 
+  const tableMappings = (bundle.tableMappings || []).map(m => ({
+    ...m,
+    id: uuidv4(),
+    canvasId: newCanvas(m.canvasId),
+    legacyDatasetId: swap(m.legacyDatasetId),
+    targetDatasetId: swap(m.targetDatasetId),
+    columnMappings: m.columnMappings.map(cp => ({ ...cp })),
+  }));
+
   const comparisons = bundle.comparisons.map(cmp => ({
     ...cmp,
     id: uuidv4(),
@@ -187,7 +199,7 @@ export async function importProjectBundle(file: File): Promise<string> {
   }));
 
   await Repository.saveImportedProjectBundle({
-    project, canvases, comparisons, tableNodes, tableEdges, columnEdges, processRecs, uploadRecs,
+    project, canvases, comparisons, tableMappings, tableNodes, tableEdges, columnEdges, processRecs, uploadRecs,
   });
   return newProjectId;
 }

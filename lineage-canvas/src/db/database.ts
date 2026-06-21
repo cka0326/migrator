@@ -1,10 +1,12 @@
 import Dexie, { type Table } from 'dexie';
-import type { TableNode, ProcessRec, TableEdge, ColumnEdge, UploadRec, EditEvent, Project, Canvas, SavedComparison } from '../types/models';
+import type { TableNode, ProcessRec, TableEdge, ColumnEdge, UploadRec, EditEvent, Project, Canvas, SavedComparison, TableMapping, SavedDashboard } from '../types/models';
 
 export class LineageDatabase extends Dexie {
   projects!: Table<Project, string>; // id
   canvases!: Table<Canvas, string>; // id
   comparisons!: Table<SavedComparison, string>; // id
+  tableMappings!: Table<TableMapping, string>; // id
+  dashboards!: Table<SavedDashboard, string>; // id
   tableNodes!: Table<TableNode, string>; // datasetId is the primary key
   processRecs!: Table<ProcessRec, string>; // processId
   tableEdges!: Table<TableEdge, string>; // edgeId
@@ -28,6 +30,11 @@ export class LineageDatabase extends Dexie {
     // v2 adds saved comparison views.
     this.version(2).stores({
       comparisons: 'id, projectId'
+    });
+    // v3 adds canvas-level table mappings and top-level saved dashboards.
+    this.version(3).stores({
+      tableMappings: 'id, canvasId, legacyDatasetId, targetDatasetId',
+      dashboards: 'id, projectId'
     });
   }
 }
