@@ -144,7 +144,7 @@ export async function exportComparisonBundle(comparisonId: string): Promise<void
   zip.file('comparison.json', JSON.stringify(bundle, null, 2));
   zip.file('diff.xlsx', XLSX.write(buildDiffWorkbook(comparison, nodeById), { type: 'array', bookType: 'xlsx' }));
   zip.file('README.txt', [
-    `Lineage Canvas — comparison bundle`,
+    `DataTrace — comparison bundle`,
     `Comparison: ${comparison.name} (mode: ${comparison.mode})`,
     `Exported: ${bundle.exportedAt}`,
     ``,

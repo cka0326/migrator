@@ -73,9 +73,10 @@ export function Header() {
   return (
     <header className="flex justify-between items-center gap-3 px-3 py-1.5 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/75 sticky top-0 z-10">
       <div className="flex items-center gap-3 flex-1 min-w-0">
+        <img src="/logo.svg" alt="DataTrace" className="h-6 w-6 shrink-0" />
         <div className="flex flex-col leading-tight min-w-0">
           <h1 className="text-sm font-semibold tracking-tight text-foreground truncate">
-            {project ? project.name : 'Lineage Canvas'}
+            {project ? project.name : 'DataTrace'}
           </h1>
           {canvas && (
             <span className="text-[11px] text-muted-foreground truncate">{canvas.name}</span>

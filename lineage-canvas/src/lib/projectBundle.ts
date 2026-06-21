@@ -91,7 +91,7 @@ export async function exportProjectBundle(projectId: string): Promise<void> {
   }
 
   zip.file('README.txt', [
-    `Lineage Canvas — project bundle`,
+    `DataTrace — project bundle`,
     `Project: ${project.name}`,
     `Exported: ${bundle.exportedAt}`,
     ``,

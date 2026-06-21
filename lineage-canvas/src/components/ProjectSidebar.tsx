@@ -321,6 +321,7 @@ export function ProjectSidebar() {
   if (collapsed) {
     return (
       <aside className="w-10 shrink-0 h-full border-r bg-white flex flex-col items-center py-3 gap-3">
+        <img src="/logo.svg" alt="DataTrace" title="DataTrace" className="h-6 w-6" />
         <button title="Expand sidebar" onClick={() => setCollapsed(false)} className="text-slate-500 hover:text-slate-800">
           <ChevronRight size={18} />
         </button>
@@ -335,6 +336,10 @@ export function ProjectSidebar() {
 
   return (
     <aside ref={asideRef} style={{ width }} className="relative shrink-0 h-full border-r bg-white flex flex-col">
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b">
+        <img src="/logo.svg" alt="DataTrace" className="h-7 w-7 shrink-0" />
+        <span className="text-base font-bold tracking-tight text-slate-800">DataTrace</span>
+      </div>
       <div className="flex items-center justify-between px-3 py-3 border-b">
         <h2 className="text-sm font-semibold tracking-tight text-slate-700">Projects</h2>
         <div className="flex items-center gap-1">

@@ -89,7 +89,7 @@ export function buildCanvasWorkbook(
 
   // Short human note. INSTRUCTIONS is a reserved (non-table) sheet.
   const instructions: Aoa = [
-    [`Lineage Canvas export — canvas "${canvas.name}"`],
+    [`DataTrace export — canvas "${canvas.name}"`],
     [project ? `Project: ${project.name}` : ''],
     [],
     ['This workbook is a filled template. Each table is a sheet; the MASTER sheet lists'],
