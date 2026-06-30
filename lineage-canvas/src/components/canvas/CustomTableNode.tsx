@@ -1,10 +1,11 @@
 import type { NodeProps } from '@xyflow/react';
 import { Handle, Position } from '@xyflow/react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 import { Badge } from '../ui/badge';
 import { ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { useStore } from '../../store/useStore';
+import { prioritizeColumns, COLUMN_PREVIEW_LIMIT } from '../../lib/columnPreview';
 
 export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
   const selectNode = useStore(state => state.selectNode);
@@ -17,6 +18,12 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
   const focusColumn = useStore(state => state.focusColumn);
 
   const { name, namespace, system, origin, columns, metadata, collapsed } = data as any;
+  const connectedColumns = useMemo(() => new Set<string>((data as any).connectedColumns ?? []), [data]);
+  // A clicked connector expands both of its tables to show every column.
+  const lineageHighlight = !!(data as any).lineageHighlight;
+  // Reports manual "+N more" expansion up to the canvas so hidden-column edges
+  // can re-anchor to their real handles.
+  const onToggleColumns = (data as any).onToggleColumns as ((id: string, expanded: boolean) => void) | undefined;
 
   const systemLabel = system === 'LEGACY'
     ? (project?.legacySystemName || 'Legacy')
@@ -25,8 +32,6 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
   const [searchQuery, setSearchQuery] = useState('');
   const [expanded, setExpanded] = useState(false);
 
-  const COLUMN_PREVIEW_LIMIT = 5;
-
   // Filter columns based on search query
   const filteredColumns = searchQuery.trim()
     ? columns.filter((col: any) =>
@@ -34,11 +39,13 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
       )
     : columns;
 
-  const sortedColumns = [...(filteredColumns || [])].sort((a: any, b: any) => a.name.localeCompare(b.name));
+  // Connected columns float to the top so they survive the preview cut; the rest
+  // are alphabetical (see prioritizeColumns).
+  const sortedColumns = prioritizeColumns(filteredColumns || [], connectedColumns);
   const isSearching = searchQuery.trim() !== '';
-  // Show a compact preview of the first few columns; expand on demand. While the
-  // user is actively filtering, always show every match.
-  const showAllColumns = expanded || isSearching;
+  // Show a compact preview of the first few columns; expand on demand, while
+  // filtering, or when a clicked connector has expanded this table.
+  const showAllColumns = expanded || isSearching || lineageHighlight;
   const visibleColumns = showAllColumns ? sortedColumns : sortedColumns.slice(0, COLUMN_PREVIEW_LIMIT);
   const hiddenColumnCount = sortedColumns.length - visibleColumns.length;
 
@@ -76,7 +83,7 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
 
   // Connector-lineage highlight: a table that belongs to a clicked connector's
   // lineage gets a blue ring (dimming of the rest is handled via node style).
-  const lineageClasses = (data as any).lineageHighlight ? 'ring-2 ring-blue-500 border-blue-400 shadow-md' : '';
+  const lineageClasses = lineageHighlight ? 'ring-2 ring-blue-500 border-blue-400 shadow-md' : '';
 
   return (
     <div
@@ -162,7 +169,7 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
           })}
           {!isFocusMode && !showAllColumns && hiddenColumnCount > 0 && (
             <button
-              onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
+              onClick={(e) => { e.stopPropagation(); setExpanded(true); onToggleColumns?.(id, true); }}
               className="py-1.5 px-2 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border-t text-center"
             >
               +{hiddenColumnCount} more {hiddenColumnCount === 1 ? 'column' : 'columns'}
@@ -170,7 +177,7 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
           )}
           {!isFocusMode && expanded && !isSearching && sortedColumns.length > COLUMN_PREVIEW_LIMIT && (
             <button
-              onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
+              onClick={(e) => { e.stopPropagation(); setExpanded(false); onToggleColumns?.(id, false); }}
               className="py-1.5 px-2 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border-t text-center"
             >
               Show less

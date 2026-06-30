@@ -9,6 +9,7 @@ import { CustomTableEdge } from './CustomTableEdge';
 import { CustomColumnEdge } from './CustomColumnEdge';
 import { MergeTablesDialog } from '../MergeTablesDialog';
 import { getLayoutedElements } from '../../lib/layout';
+import { previewVisibleColumns } from '../../lib/columnPreview';
 import { Button } from '../ui/button';
 import { GitMerge } from 'lucide-react';
 import type { System, TableEdge, ColumnEdge } from '../../types/models';
@@ -60,6 +61,17 @@ function SystemCanvas({ system }: SystemCanvasProps) {
   // When a connector is clicked we highlight just the two tables it directly
   // connects (and the connector itself), dimming the rest.
   const [lineage, setLineage] = useState<{ nodes: Set<string>; edges: Set<string> } | null>(null);
+  // Tables the user manually expanded via "+N more". Lifted out of the node so
+  // the edge resolver can anchor their now-visible columns to real handles.
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
+
+  const onToggleColumns = useCallback((id: string, expanded: boolean) => {
+    setExpandedNodeIds(prev => {
+      const next = new Set(prev);
+      if (expanded) next.add(id); else next.delete(id);
+      return next;
+    });
+  }, []);
 
   const onSelectionChange = useCallback((params: any) => {
     setSelectedNodeIds((params.nodes ?? []).map((n: any) => n.id));
@@ -116,8 +128,27 @@ function SystemCanvas({ system }: SystemCanvasProps) {
     });
   }, [storeColumnEdges, storeNodes, system]);
 
+  // datasetId -> set of its columns that take part in any column edge. Used to
+  // prioritize connected columns in the preview and to decide handle anchoring.
+  const connectedColumnsByNode = useMemo(() => {
+    const map: Record<string, Set<string>> = {};
+    const add = (datasetId: string, column: string) => {
+      (map[datasetId] ??= new Set<string>()).add(column);
+    };
+    for (const e of systemColumnEdges) {
+      add(e.target.datasetId, e.target.column);
+      for (const src of e.sources) add(src.datasetId, src.column);
+    }
+    return map;
+  }, [systemColumnEdges]);
+
   const initialNodes = useMemo(() => {
     const placedNodes: any[] = [];
+    const withConnected = (node: any) => ({
+      ...node,
+      connectedColumns: [...(connectedColumnsByNode[node.datasetId] ?? [])],
+      onToggleColumns,
+    });
 
     // First place all nodes that already have a position in the store
     for (const node of systemNodes) {
@@ -126,7 +157,7 @@ function SystemCanvas({ system }: SystemCanvasProps) {
           id: node.datasetId,
           type: 'tableNode',
           position: node.position,
-          data: node,
+          data: withConnected(node),
         });
       }
     }
@@ -153,19 +184,39 @@ function SystemCanvas({ system }: SystemCanvasProps) {
           id: node.datasetId,
           type: 'tableNode',
           position: { x: posX, y: posY },
-          data: node,
+          data: withConnected(node),
         };
         placedNodes.push(newNode);
       }
     }
 
     return placedNodes;
-  }, [systemNodes]);
+  }, [systemNodes, connectedColumnsByNode, onToggleColumns]);
 
   const initialEdges = useMemo(() => {
     const isFocusMode = !!columnFocus;
     const isTraced = (datasetId: string, column: string) =>
       !!tracedColumns[datasetId]?.includes(column);
+
+    // Nodes that render every column — either expanded by a clicked connector or
+    // manually via "+N more" — can anchor their edges to the precise column handle.
+    const expandedNodes = new Set<string>([...(lineage?.nodes ?? []), ...expandedNodeIds]);
+    const previewCache: Record<string, Set<string>> = {};
+    const previewVisible = (datasetId: string) => {
+      if (!previewCache[datasetId]) {
+        const cols = (storeNodes[datasetId]?.columns ?? []).map((c: any) => c.name);
+        previewCache[datasetId] = previewVisibleColumns(cols, connectedColumnsByNode[datasetId] ?? new Set());
+      }
+      return previewCache[datasetId];
+    };
+    // Pick the column handle when the column is actually shown, otherwise fall
+    // back to the table-level handle so the connection is never dropped.
+    const resolveHandle = (datasetId: string, column: string, kind: 'source' | 'target') => {
+      const tableHandle = kind === 'source' ? 'table-source' : 'table-target';
+      if (storeNodes[datasetId]?.collapsed) return tableHandle;
+      const shown = expandedNodes.has(datasetId) || previewVisible(datasetId).has(column);
+      return shown ? `col-${column}-${kind}` : tableHandle;
+    };
 
     // While tracing a column's lineage, hide table-level edges so only the
     // column lineage is shown.
@@ -190,18 +241,18 @@ function SystemCanvas({ system }: SystemCanvasProps) {
         // In focus mode only keep edges whose endpoints are both on the lineage.
         .filter(src => !isFocusMode || (isTraced(src.datasetId, src.column) && isTraced(e.target.datasetId, e.target.column)))
         .map((src, i) => {
-          const isSourceCollapsed = storeNodes[src.datasetId]?.collapsed;
-          const isTargetCollapsed = storeNodes[e.target.datasetId]?.collapsed;
-          // In focus mode every traced node renders its columns, so always anchor
-          // to the column handles (ignore the collapsed flag).
-          const useColHandles = isFocusMode;
           const isUnknown = e.transformationType === 'UNKNOWN';
+          // In focus mode every traced node renders its columns, so always anchor
+          // to the column handles; otherwise route through the preview-aware
+          // resolver that falls back to the table handle for hidden columns.
+          const sourceHandle = isFocusMode ? `col-${src.column}-source` : resolveHandle(src.datasetId, src.column, 'source');
+          const targetHandle = isFocusMode ? `col-${e.target.column}-target` : resolveHandle(e.target.datasetId, e.target.column, 'target');
           return {
             id: `${e.edgeId}-${i}`,
             source: src.datasetId,
             target: e.target.datasetId,
-            sourceHandle: (!useColHandles && isSourceCollapsed) ? 'table-source' : `col-${src.column}-source`,
-            targetHandle: (!useColHandles && isTargetCollapsed) ? 'table-target' : `col-${e.target.column}-target`,
+            sourceHandle,
+            targetHandle,
             type: 'columnEdge',
             animated: isFocusMode,
             // Arrowhead points source -> target (upstream column feeds downstream).
@@ -212,7 +263,7 @@ function SystemCanvas({ system }: SystemCanvasProps) {
     );
 
     return [...tableFlowEdges, ...columnFlowEdges];
-  }, [systemTableEdges, systemColumnEdges, storeNodes, columnFocus, tracedColumns, system]);
+  }, [systemTableEdges, systemColumnEdges, storeNodes, columnFocus, tracedColumns, system, connectedColumnsByNode, lineage, expandedNodeIds]);
 
   useEffect(() => {
     setNodes(initialNodes as any);
