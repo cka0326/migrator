@@ -112,6 +112,32 @@ function NodeSearch({ system }: { system: System }) {
   );
 }
 
+// Arrow keys pan the viewport so the graph is navigable without a mouse.
+// Rendered inside ReactFlow for viewport access. Ignored while typing or when a
+// node is focused (so React Flow's own node-move keys still work).
+function ArrowKeyPan() {
+  const { getViewport, setViewport } = useReactFlow();
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const ae = document.activeElement as HTMLElement | null;
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable || ae.closest('.react-flow__node'))) return;
+
+      const step = e.shiftKey ? 240 : 80; // Shift pans faster
+      const vp = getViewport();
+      // Move the camera in the arrow's direction (content shifts the other way).
+      const x = vp.x + (e.key === 'ArrowLeft' ? step : e.key === 'ArrowRight' ? -step : 0);
+      const y = vp.y + (e.key === 'ArrowUp' ? step : e.key === 'ArrowDown' ? -step : 0);
+      setViewport({ x, y, zoom: vp.zoom });
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [getViewport, setViewport]);
+  return null;
+}
+
 interface SystemCanvasProps {
   system: System;
 }
@@ -501,6 +527,7 @@ function SystemCanvas({ system }: SystemCanvasProps) {
           nodeColor={(n) => ((n.data as any)?.system === 'LEGACY' ? '#93c5fd' : '#c4b5fd')}
         />
         <FocusCentering focusId={columnFocus?.datasetId ?? null} />
+        <ArrowKeyPan />
         <Panel position="top-left">
           <div className="flex flex-col gap-2">
             <NodeSearch system={system} />
