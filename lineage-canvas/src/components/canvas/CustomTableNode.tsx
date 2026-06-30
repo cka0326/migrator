@@ -21,8 +21,9 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
   const connectedColumns = useMemo(() => new Set<string>((data as any).connectedColumns ?? []), [data]);
   // A clicked connector expands both of its tables to show every column.
   const lineageHighlight = !!(data as any).lineageHighlight;
-  // Reports manual "+N more" expansion up to the canvas so hidden-column edges
-  // can re-anchor to their real handles.
+  // Expanded via "+N more" or a table double-click. The canvas owns this state
+  // (so hidden-column edges can re-anchor) and pushes it back down as a flag.
+  const forceExpanded = !!(data as any).forceExpanded;
   const onToggleColumns = (data as any).onToggleColumns as ((id: string, expanded: boolean) => void) | undefined;
 
   const systemLabel = system === 'LEGACY'
@@ -30,7 +31,6 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
     : (project?.targetSystemName || 'Target');
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [expanded, setExpanded] = useState(false);
 
   // Filter columns based on search query
   const filteredColumns = searchQuery.trim()
@@ -43,9 +43,9 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
   // are alphabetical (see prioritizeColumns).
   const sortedColumns = prioritizeColumns(filteredColumns || [], connectedColumns);
   const isSearching = searchQuery.trim() !== '';
-  // Show a compact preview of the first few columns; expand on demand, while
-  // filtering, or when a clicked connector has expanded this table.
-  const showAllColumns = expanded || isSearching || lineageHighlight;
+  // Show a compact preview of the first few columns; expand on demand ("+N more"
+  // / double-click), while filtering, or when a clicked connector expanded it.
+  const showAllColumns = forceExpanded || isSearching || lineageHighlight;
   const visibleColumns = showAllColumns ? sortedColumns : sortedColumns.slice(0, COLUMN_PREVIEW_LIMIT);
   const hiddenColumnCount = sortedColumns.length - visibleColumns.length;
 
@@ -174,15 +174,15 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
           {/* Toggle pinned below the scroll region so it stays visible. */}
           {!isFocusMode && !showAllColumns && hiddenColumnCount > 0 && (
             <button
-              onClick={(e) => { e.stopPropagation(); setExpanded(true); onToggleColumns?.(id, true); }}
+              onClick={(e) => { e.stopPropagation(); onToggleColumns?.(id, true); }}
               className="py-1.5 px-2 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border-t text-center rounded-b-md"
             >
               +{hiddenColumnCount} more {hiddenColumnCount === 1 ? 'column' : 'columns'}
             </button>
           )}
-          {!isFocusMode && expanded && !isSearching && sortedColumns.length > COLUMN_PREVIEW_LIMIT && (
+          {!isFocusMode && forceExpanded && !isSearching && sortedColumns.length > COLUMN_PREVIEW_LIMIT && (
             <button
-              onClick={(e) => { e.stopPropagation(); setExpanded(false); onToggleColumns?.(id, false); }}
+              onClick={(e) => { e.stopPropagation(); onToggleColumns?.(id, false); }}
               className="py-1.5 px-2 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border-t text-center rounded-b-md"
             >
               Show less

@@ -167,6 +167,23 @@ function SystemCanvas({ system }: SystemCanvasProps) {
   // Clicking empty canvas returns everything to normal.
   const onPaneClick = useCallback(() => setLineage(null), []);
 
+  // Double-clicking a table expands it and every directly-connected table so all
+  // of its column connections anchor to real handles. Double-clicking again
+  // collapses the same group back to the preview.
+  const onNodeDoubleClick = useCallback((_event: any, node: any) => {
+    const group = new Set<string>([node.id]);
+    for (const e of edges) {
+      if (e.source === node.id) group.add(e.target);
+      else if (e.target === node.id) group.add(e.source);
+    }
+    setExpandedNodeIds(prev => {
+      const next = new Set(prev);
+      const collapse = prev.has(node.id);
+      for (const id of group) { if (collapse) next.delete(id); else next.add(id); }
+      return next;
+    });
+  }, [edges]);
+
   // A connector highlight only makes sense for the edges currently rendered;
   // entering/leaving column-focus mode rebuilds them, so drop the highlight.
   useEffect(() => { setLineage(null); }, [columnFocus]);
@@ -187,14 +204,21 @@ function SystemCanvas({ system }: SystemCanvasProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [lineage]);
 
-  // Re-derive nodes/edges with highlight + dimming applied. Returns the originals
-  // untouched when nothing is highlighted.
+  // Re-derive nodes/edges with highlight + dimming + forced expansion applied.
+  // Returns the originals (stable refs) for nodes that need none of it.
   const displayNodes = useMemo(() => {
-    if (!lineage) return nodes;
-    return nodes.map(n => lineage.nodes.has(n.id)
-      ? { ...n, data: { ...(n.data as any), lineageHighlight: true } }
-      : { ...n, style: { ...(n.style as any), opacity: 0.3 } });
-  }, [nodes, lineage]);
+    if (!lineage && expandedNodeIds.size === 0) return nodes;
+    return nodes.map(n => {
+      const expanded = expandedNodeIds.has(n.id);
+      const highlight = !!lineage && lineage.nodes.has(n.id);
+      const dim = !!lineage && !lineage.nodes.has(n.id);
+      if (!expanded && !highlight && !dim) return n;
+      const data: any = { ...(n.data as any) };
+      if (expanded) data.forceExpanded = true;
+      if (highlight) data.lineageHighlight = true;
+      return dim ? { ...n, data, style: { ...(n.style as any), opacity: 0.3 } } : { ...n, data };
+    });
+  }, [nodes, lineage, expandedNodeIds]);
 
   const displayEdges = useMemo(() => {
     if (!lineage) return edges;
@@ -453,10 +477,12 @@ function SystemCanvas({ system }: SystemCanvasProps) {
         onConnect={onConnect}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         onSelectionChange={onSelectionChange}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         deleteKeyCode={['Backspace', 'Delete']}
+        zoomOnDoubleClick={false}
         fitView
       >
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#cbd5e1" />
