@@ -74,9 +74,13 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
   // ones queued for a merge — clearly stand out from unselected cards.
   const selectedClasses = !isFocusMode && selected ? 'ring-2 ring-primary border-primary shadow-md' : '';
 
+  // Connector-lineage highlight: a table that belongs to a clicked connector's
+  // lineage gets a blue ring (dimming of the rest is handled via node style).
+  const lineageClasses = (data as any).lineageHighlight ? 'ring-2 ring-blue-500 border-blue-400 shadow-md' : '';
+
   return (
     <div
-      className={`bg-card border-2 rounded-lg shadow-sm w-[280px] text-left overflow-visible transition-shadow duration-150 hover:shadow-md ${origin === 'STUB' ? 'border-dashed border-orange-300' : 'border-slate-300'} ${focusClasses} ${selectedClasses}`}
+      className={`bg-card border-2 rounded-lg shadow-sm w-[280px] text-left overflow-visible transition-shadow duration-150 hover:shadow-md ${origin === 'STUB' ? 'border-dashed border-orange-300' : 'border-slate-300'} ${focusClasses} ${selectedClasses} ${lineageClasses}`}
     >
       {/* Table-level Handles */}
       <Handle type="target" position={Position.Left} id="table-target" className="w-3 h-3 bg-slate-400 cursor-crosshair" />

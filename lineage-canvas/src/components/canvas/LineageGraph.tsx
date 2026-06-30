@@ -57,10 +57,44 @@ function SystemCanvas({ system }: SystemCanvasProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [mergeOpen, setMergeOpen] = useState(false);
+  // When a connector is clicked we highlight just the two tables it directly
+  // connects (and the connector itself), dimming the rest.
+  const [lineage, setLineage] = useState<{ nodes: Set<string>; edges: Set<string> } | null>(null);
 
   const onSelectionChange = useCallback((params: any) => {
     setSelectedNodeIds((params.nodes ?? []).map((n: any) => n.id));
   }, []);
+
+  const onEdgeClick = useCallback((_event: any, clicked: Edge) => {
+    setLineage({
+      nodes: new Set<string>([clicked.source, clicked.target]),
+      edges: new Set<string>([clicked.id]),
+    });
+  }, []);
+
+  // Clicking empty canvas returns everything to normal.
+  const onPaneClick = useCallback(() => setLineage(null), []);
+
+  // A connector highlight only makes sense for the edges currently rendered;
+  // entering/leaving column-focus mode rebuilds them, so drop the highlight.
+  useEffect(() => { setLineage(null); }, [columnFocus]);
+
+  // Re-derive nodes/edges with highlight + dimming applied. Returns the originals
+  // untouched when nothing is highlighted.
+  const displayNodes = useMemo(() => {
+    if (!lineage) return nodes;
+    return nodes.map(n => lineage.nodes.has(n.id)
+      ? { ...n, data: { ...(n.data as any), lineageHighlight: true } }
+      : { ...n, style: { ...(n.style as any), opacity: 0.3 } });
+  }, [nodes, lineage]);
+
+  const displayEdges = useMemo(() => {
+    if (!lineage) return edges;
+    return edges.map(e => lineage.edges.has(e.id)
+      ? { ...e, animated: true, zIndex: 1000, data: { ...(e.data as any), lineageHighlight: true } }
+      // Drop the arrowhead on dimmed edges so faded lines don't keep solid markers.
+      : { ...e, markerEnd: undefined, data: { ...(e.data as any), lineageDimmed: true } });
+  }, [edges, lineage]);
 
   // The store already holds only the active canvas's data; filter to this system tab.
   const systemNodes = useMemo(() => {
@@ -263,13 +297,15 @@ function SystemCanvas({ system }: SystemCanvasProps) {
   return (
     <div className="w-full h-full relative">
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={displayNodes}
+        edges={displayEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onEdgesDelete={onEdgesDelete}
         onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}
+        onEdgeClick={onEdgeClick}
+        onPaneClick={onPaneClick}
         onSelectionChange={onSelectionChange}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}

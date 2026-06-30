@@ -8,6 +8,7 @@ export function CustomTableEdge({
   targetY,
   sourcePosition,
   targetPosition,
+  data,
   style,
   markerEnd,
 }: EdgeProps<any>) {
@@ -20,15 +21,19 @@ export function CustomTableEdge({
     targetPosition,
   });
 
+  const isHighlighted = !!data?.lineageHighlight;
+  const isDimmed = !!data?.lineageDimmed;
+
   return (
-    <BaseEdge 
-       path={edgePath} 
-       markerEnd={markerEnd} 
-       style={{ 
-          ...style, 
-          stroke: '#cbd5e1', 
-          strokeWidth: 3, 
-       }} 
+    <BaseEdge
+       path={edgePath}
+       markerEnd={markerEnd}
+       style={{
+          ...style,
+          stroke: isHighlighted ? '#2563eb' : '#cbd5e1',
+          strokeWidth: isHighlighted ? 4 : 3,
+          opacity: isDimmed ? 0.15 : 1,
+       }}
     />
   );
 }

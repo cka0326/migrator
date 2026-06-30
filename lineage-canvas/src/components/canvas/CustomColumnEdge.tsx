@@ -22,15 +22,19 @@ export function CustomColumnEdge({
   });
 
   const isUnknown = data?.transformationType === 'UNKNOWN';
-  const strokeColor = isUnknown ? '#9ca3af' : '#60a5fa'; // gray for unknown, blue for known
+  const isHighlighted = !!data?.lineageHighlight;
+  const isDimmed = !!data?.lineageDimmed;
+  // gray for unknown, blue for known; highlighted lineage edges deepen to a
+  // stronger blue and thicken.
+  const strokeColor = isHighlighted ? '#2563eb' : (isUnknown ? '#9ca3af' : '#60a5fa');
 
   return (
     <BaseEdge path={edgePath} markerEnd={markerEnd} style={{
         ...style,
         stroke: strokeColor,
-        strokeWidth: 1.5,
+        strokeWidth: isHighlighted ? 2.5 : 1.5,
         strokeDasharray: isUnknown ? '4 4' : 'none',
-        opacity: 0.8
+        opacity: isDimmed ? 0.1 : (isHighlighted ? 1 : 0.8)
     }} />
   );
 }
