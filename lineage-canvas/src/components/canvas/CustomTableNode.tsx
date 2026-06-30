@@ -140,37 +140,42 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
 
       {/* Columns. Clicking a column traces its lineage across the whole graph. */}
       {showBody && (
-        <div className={`flex flex-col text-xs font-mono bg-background rounded-b-md ${bodyColumns.length > 6 ? 'max-h-[240px] overflow-y-auto' : ''}`}>
-          {bodyColumns.map((col: any) => {
-            const isFocusedCol = columnFocus?.datasetId === id && columnFocus?.column === col.name;
-            return (
-              <div
-                key={col.name}
-                onClick={(e) => { e.stopPropagation(); focusColumn(id, col.name); }}
-                title="Click to trace this column's lineage"
-                className={`relative flex justify-between items-center py-1.5 px-2 border-b last:border-0 group cursor-pointer hover:bg-muted/50 ${isFocusedCol ? 'bg-blue-100 hover:bg-blue-100' : ''}`}
-              >
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id={`col-${col.name}-target`}
-                  className="w-2.5 h-2.5 -ml-[6px] bg-slate-400 border border-slate-500 rounded-full opacity-60 group-hover:opacity-100 hover:scale-125 transition-all cursor-crosshair pointer-events-auto"
-                />
-                <span className={`truncate mr-2 flex-1 ${isFocusedCol ? 'font-bold text-blue-700' : ''}`}>{col.name}</span>
-                <span className="text-[10px] text-muted-foreground">{col.dataType}</span>
-                <Handle
-                  type="source"
-                  position={Position.Right}
-                  id={`col-${col.name}-source`}
-                  className="w-2.5 h-2.5 -mr-[6px] bg-slate-400 border border-slate-500 rounded-full opacity-60 group-hover:opacity-100 hover:scale-125 transition-all cursor-crosshair pointer-events-auto"
-                />
-              </div>
-            );
-          })}
+        <div className="flex flex-col text-xs font-mono bg-background rounded-b-md">
+          {/* Scroll region holds only the rows. `nowheel` stops React Flow from
+              hijacking the wheel for canvas zoom so the list scrolls normally. */}
+          <div className={bodyColumns.length > 6 ? 'flex flex-col max-h-[240px] overflow-y-auto nowheel' : 'flex flex-col'}>
+            {bodyColumns.map((col: any) => {
+              const isFocusedCol = columnFocus?.datasetId === id && columnFocus?.column === col.name;
+              return (
+                <div
+                  key={col.name}
+                  onClick={(e) => { e.stopPropagation(); focusColumn(id, col.name); }}
+                  title="Click to trace this column's lineage"
+                  className={`relative flex justify-between items-center py-1.5 px-2 border-b last:border-0 group cursor-pointer hover:bg-muted/50 ${isFocusedCol ? 'bg-blue-100 hover:bg-blue-100' : ''}`}
+                >
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={`col-${col.name}-target`}
+                    className="w-2.5 h-2.5 -ml-[6px] bg-slate-400 border border-slate-500 rounded-full opacity-60 group-hover:opacity-100 hover:scale-125 transition-all cursor-crosshair pointer-events-auto"
+                  />
+                  <span className={`truncate mr-2 flex-1 ${isFocusedCol ? 'font-bold text-blue-700' : ''}`}>{col.name}</span>
+                  <span className="text-[10px] text-muted-foreground">{col.dataType}</span>
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={`col-${col.name}-source`}
+                    className="w-2.5 h-2.5 -mr-[6px] bg-slate-400 border border-slate-500 rounded-full opacity-60 group-hover:opacity-100 hover:scale-125 transition-all cursor-crosshair pointer-events-auto"
+                  />
+                </div>
+              );
+            })}
+          </div>
+          {/* Toggle pinned below the scroll region so it stays visible. */}
           {!isFocusMode && !showAllColumns && hiddenColumnCount > 0 && (
             <button
               onClick={(e) => { e.stopPropagation(); setExpanded(true); onToggleColumns?.(id, true); }}
-              className="py-1.5 px-2 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border-t text-center"
+              className="py-1.5 px-2 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border-t text-center rounded-b-md"
             >
               +{hiddenColumnCount} more {hiddenColumnCount === 1 ? 'column' : 'columns'}
             </button>
@@ -178,7 +183,7 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
           {!isFocusMode && expanded && !isSearching && sortedColumns.length > COLUMN_PREVIEW_LIMIT && (
             <button
               onClick={(e) => { e.stopPropagation(); setExpanded(false); onToggleColumns?.(id, false); }}
-              className="py-1.5 px-2 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border-t text-center"
+              className="py-1.5 px-2 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border-t text-center rounded-b-md"
             >
               Show less
             </button>
