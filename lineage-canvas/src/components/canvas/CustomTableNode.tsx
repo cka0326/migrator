@@ -1,6 +1,6 @@
 import type { NodeProps } from '@xyflow/react';
 import { Handle, Position } from '@xyflow/react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 
 import { Badge } from '../ui/badge';
 import { ChevronDown, ChevronRight, Search } from 'lucide-react';
@@ -31,6 +31,10 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
     : (project?.targetSystemName || 'Target');
 
   const [searchQuery, setSearchQuery] = useState('');
+  // A double-click (expand) also fires two single clicks; defer opening the
+  // details panel so a double-click can cancel it before it runs.
+  const clickTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (clickTimer.current) window.clearTimeout(clickTimer.current); }, []);
 
   // Filter columns based on search query
   const filteredColumns = searchQuery.trim()
@@ -98,7 +102,12 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
           it to add the node to the selection without opening the panel. */}
       <div
         className="p-2 border-b bg-muted/50 rounded-t-md cursor-pointer flex flex-col gap-1"
-        onClick={(e) => { if (e.ctrlKey || e.metaKey || e.shiftKey) return; selectNode(id); }}
+        onClick={(e) => {
+          if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+          if (clickTimer.current) window.clearTimeout(clickTimer.current);
+          clickTimer.current = window.setTimeout(() => { selectNode(id); clickTimer.current = null; }, 200);
+        }}
+        onDoubleClick={() => { if (clickTimer.current) { window.clearTimeout(clickTimer.current); clickTimer.current = null; } }}
       >
         <div className="flex justify-between items-start">
           <div className="flex flex-col min-w-0">
