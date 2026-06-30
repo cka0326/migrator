@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useCallback, useState } from 'react';
-import { ReactFlow, Controls, Background, useNodesState, useEdgesState, useReactFlow, BackgroundVariant, MarkerType } from '@xyflow/react';
+import { ReactFlow, Controls, Background, MiniMap, Panel, useNodesState, useEdgesState, useReactFlow, BackgroundVariant, MarkerType } from '@xyflow/react';
 import type { Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -11,7 +11,7 @@ import { MergeTablesDialog } from '../MergeTablesDialog';
 import { getLayoutedElements } from '../../lib/layout';
 import { previewVisibleColumns } from '../../lib/columnPreview';
 import { Button } from '../ui/button';
-import { GitMerge } from 'lucide-react';
+import { GitMerge, Search } from 'lucide-react';
 import type { System, TableEdge, ColumnEdge } from '../../types/models';
 
 const nodeTypes = { tableNode: CustomTableNode as any };
@@ -30,6 +30,86 @@ function FocusCentering({ focusId }: { focusId: string | null }) {
     setCenter(node.position.x + w / 2, node.position.y + h / 2, { zoom: getZoom(), duration: 500 });
   }, [focusId, getNode, getZoom, setCenter]);
   return null;
+}
+
+// Jump-to-table search for large graphs: type a name, pick a result, and the
+// viewport recenters on that table (and opens its details). Rendered inside
+// ReactFlow so it can drive the viewport via useReactFlow.
+function NodeSearch({ system }: { system: System }) {
+  const { getNode, setCenter, getZoom } = useReactFlow();
+  const storeNodes = useStore(state => state.nodes);
+  const selectNode = useStore(state => state.selectNode);
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return Object.values(storeNodes)
+      .filter(n => n.system === system)
+      .filter(n => n.name.toLowerCase().includes(q) || (n.namespace ?? '').toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 8);
+  }, [query, storeNodes, system]);
+
+  const jumpTo = (datasetId: string) => {
+    const node = getNode(datasetId);
+    if (node) {
+      const w = (node.measured?.width ?? node.width ?? 280);
+      const h = (node.measured?.height ?? node.height ?? 120);
+      setCenter(node.position.x + w / 2, node.position.y + h / 2, { zoom: Math.max(getZoom(), 1), duration: 600 });
+    }
+    selectNode(datasetId);
+    setQuery('');
+    setOpen(false);
+  };
+
+  return (
+    <div className="w-64">
+      <div className="relative">
+        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+        <input
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="Find a table…"
+          className="w-full rounded-md border bg-white pl-7 pr-2 py-1.5 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && results.length > 0) {
+              jumpTo(results[0].datasetId);
+              e.preventDefault();
+            } else if (e.key === 'Escape') {
+              // Clear the search; stop the global Esc stack from also firing.
+              setQuery('');
+              setOpen(false);
+              (e.target as HTMLInputElement).blur();
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
+        />
+      </div>
+      {open && results.length > 0 && (
+        <div className="mt-1 max-h-64 overflow-y-auto rounded-md border bg-white shadow-md nowheel">
+          {results.map(n => (
+            <button
+              key={n.datasetId}
+              onClick={() => jumpTo(n.datasetId)}
+              className="flex w-full flex-col items-start px-2 py-1.5 text-left hover:bg-muted/60 border-b last:border-0"
+            >
+              <span className="text-xs font-medium truncate w-full">{n.name}</span>
+              {n.namespace && <span className="text-[10px] text-muted-foreground truncate w-full">{n.namespace}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {open && query.trim() !== '' && results.length === 0 && (
+        <div className="mt-1 rounded-md border bg-white px-2 py-1.5 text-xs text-muted-foreground shadow-md">
+          No tables match “{query}”.
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface SystemCanvasProps {
@@ -365,7 +445,29 @@ function SystemCanvas({ system }: SystemCanvasProps) {
       >
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#cbd5e1" />
         <Controls />
+        <MiniMap
+          pannable
+          zoomable
+          ariaLabel="Graph minimap"
+          nodeStrokeWidth={2}
+          nodeColor={(n) => ((n.data as any)?.system === 'LEGACY' ? '#93c5fd' : '#c4b5fd')}
+        />
         <FocusCentering focusId={columnFocus?.datasetId ?? null} />
+        <Panel position="top-left">
+          <div className="flex flex-col gap-2">
+            <NodeSearch system={system} />
+            {columnFocus && (
+              <div className="flex items-center gap-2 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 shadow-sm">
+                <span className="text-xs text-blue-900">
+                  Tracing lineage for <span className="font-mono font-semibold">{columnFocus.column}</span>
+                </span>
+                <Button onClick={() => clearColumnFocus()} variant="ghost" size="sm" className="h-6 px-2 text-xs text-blue-700 hover:bg-blue-100">
+                  Exit
+                </Button>
+              </div>
+            )}
+          </div>
+        </Panel>
       </ReactFlow>
 
       <div className="absolute top-3 right-4 z-10 flex items-center gap-2">
@@ -384,17 +486,6 @@ function SystemCanvas({ system }: SystemCanvasProps) {
         onOpenChange={(o) => setMergeOpen(o)}
         sources={selectedNodeIds.map(id => storeNodes[id]).filter((n): n is NonNullable<typeof n> => !!n)}
       />
-
-      {columnFocus && (
-        <div className="absolute top-3 left-4 z-10 flex items-center gap-2 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 shadow-sm">
-          <span className="text-xs text-blue-900">
-            Tracing lineage for <span className="font-mono font-semibold">{columnFocus.column}</span>
-          </span>
-          <Button onClick={() => clearColumnFocus()} variant="ghost" size="sm" className="h-6 px-2 text-xs text-blue-700 hover:bg-blue-100">
-            Exit
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
