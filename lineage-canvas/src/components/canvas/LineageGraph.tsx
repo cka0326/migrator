@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useCallback, useState } from 'react';
-import { ReactFlow, Controls, Background, useNodesState, useEdgesState, useReactFlow, BackgroundVariant } from '@xyflow/react';
+import { ReactFlow, Controls, Background, useNodesState, useEdgesState, useReactFlow, BackgroundVariant, MarkerType } from '@xyflow/react';
 import type { Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -142,6 +142,8 @@ function SystemCanvas({ system }: SystemCanvasProps) {
       sourceHandle: 'table-source',
       targetHandle: 'table-target',
       type: 'tableEdge',
+      // Arrowhead points source -> target so the data-flow direction is visible.
+      markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#94a3b8' },
       data: e as any,
     }));
 
@@ -159,6 +161,7 @@ function SystemCanvas({ system }: SystemCanvasProps) {
           // In focus mode every traced node renders its columns, so always anchor
           // to the column handles (ignore the collapsed flag).
           const useColHandles = isFocusMode;
+          const isUnknown = e.transformationType === 'UNKNOWN';
           return {
             id: `${e.edgeId}-${i}`,
             source: src.datasetId,
@@ -167,6 +170,8 @@ function SystemCanvas({ system }: SystemCanvasProps) {
             targetHandle: (!useColHandles && isTargetCollapsed) ? 'table-target' : `col-${e.target.column}-target`,
             type: 'columnEdge',
             animated: isFocusMode,
+            // Arrowhead points source -> target (upstream column feeds downstream).
+            markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: isUnknown ? '#9ca3af' : '#60a5fa' },
             data: e as any,
           };
         })
