@@ -1,0 +1,1 @@
+function e(e,t){let n=URL.createObjectURL(e),r=document.createElement(`a`);r.href=n,r.download=t,document.body.appendChild(r),r.click(),r.remove(),URL.revokeObjectURL(n)}function t(e){return(e||`untitled`).trim().replace(/[^A-Za-z0-9._-]+/g,`_`).replace(/^_+|_+$/g,``)||`untitled`}export{t as n,e as t};

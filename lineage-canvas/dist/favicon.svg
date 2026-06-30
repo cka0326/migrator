@@ -1,0 +1,22 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="dtGrad" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#60a5fa"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <!-- lineage edges (data flow / trace) -->
+  <g stroke="#93c5fd" stroke-width="1.6" stroke-linecap="round">
+    <path d="M7.4 7.4 L13.6 10.3"/>
+    <path d="M7.4 16.6 L13.6 13.7"/>
+  </g>
+  <!-- directional arrowheads into target -->
+  <path d="M14.77 10.75 L12.27 10.92 L13.27 8.74 Z" fill="#3b82f6"/>
+  <path d="M14.77 13.25 L13.27 15.26 L12.27 13.08 Z" fill="#3b82f6"/>
+  <!-- nodes -->
+  <circle cx="5.5" cy="6.5" r="2.5" fill="url(#dtGrad)"/>
+  <circle cx="5.5" cy="17.5" r="2.5" fill="url(#dtGrad)"/>
+  <circle cx="17.5" cy="12" r="3" fill="url(#dtGrad)"/>
+  <!-- trace highlight on target -->
+  <circle cx="17.5" cy="12" r="1.2" fill="#dbeafe"/>
+</svg>

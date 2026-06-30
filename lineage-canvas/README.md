@@ -113,6 +113,26 @@ npm run preview
 npm run lint
 ```
 
+### Running without Node (Python only)
+
+Node and npm are only **build** tools — the app itself is a local-first static site that runs entirely in the browser. So on a machine that has Python but cannot install Node/npm, you can run the existing build with nothing but Python:
+
+```bash
+cd lineage-canvas
+python3 serve.py            # serves dist/ at http://localhost:5173 and opens a browser
+```
+
+Useful flags: `--port 8000`, `--no-browser`, `--dir <build-dir>`. The script serves the already-built `dist/` folder; it does not need any dependencies beyond the Python standard library.
+
+If you prefer the one-liner without the helper script, serve `dist/` directly (asset paths are absolute, so start the server **from inside** `dist/`):
+
+```bash
+cd lineage-canvas/dist
+python3 -m http.server 5173
+```
+
+> **Note:** This only *runs* an existing build. Changing the source and refreshing `dist/` still requires Node (`npm run build`). The usual workflow for a Node-less machine is: build `dist/` on a machine that has Node, copy the `dist/` folder over, then serve it with `python3 serve.py`.
+
 ### Deploying
 
 The build output in `dist/` is fully static — you can host it on any static host (GitHub Pages, Netlify, Vercel, S3, an internal web server, etc.). Because all data stays in the browser, no server-side runtime is required.

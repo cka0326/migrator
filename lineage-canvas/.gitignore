@@ -8,7 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+# dist/ is intentionally committed so the app can be served on machines that
+# have Python but cannot install Node/npm (see "Running without Node" in README).
 dist-ssr
 *.local
 
