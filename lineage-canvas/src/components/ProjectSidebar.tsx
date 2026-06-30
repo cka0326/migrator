@@ -102,9 +102,11 @@ function ProjectItem({ project }: { project: Project }) {
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   const handleAddCanvas = async () => {
-    const name = window.prompt('New canvas name (a point-in-time snapshot):', `Canvas ${projectCanvases.length + 1}`);
-    if (!name) return;
-    const id = await createCanvas(project.id, name.trim());
+    // Auto-name the snapshot with the current local time (YYYY-MM-DD-HH-MM).
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const name = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}`;
+    const id = await createCanvas(project.id, name);
     await selectCanvas(id);
   };
 
