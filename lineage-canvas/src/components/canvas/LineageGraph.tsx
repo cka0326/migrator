@@ -167,20 +167,26 @@ function SystemCanvas({ system }: SystemCanvasProps) {
   // Clicking empty canvas returns everything to normal.
   const onPaneClick = useCallback(() => setLineage(null), []);
 
-  // Double-clicking a table expands it and every directly-connected table so all
-  // of its column connections anchor to real handles. Double-clicking again
-  // collapses the same group back to the preview.
+  // Double-clicking a table focuses its hub: highlight it and every directly-
+  // connected table (expanding them to show all columns and re-anchoring the
+  // spoke connections to real handles), and dim everything else — the same
+  // focus treatment as column-lineage tracing. Double-clicking the same hub
+  // toggles back; a pane click or Esc also clears it.
   const onNodeDoubleClick = useCallback((_event: any, node: any) => {
-    const group = new Set<string>([node.id]);
+    const groupNodes = new Set<string>([node.id]);
+    const groupEdges = new Set<string>();
     for (const e of edges) {
-      if (e.source === node.id) group.add(e.target);
-      else if (e.target === node.id) group.add(e.source);
+      if (e.source === node.id || e.target === node.id) {
+        groupEdges.add(e.id);
+        groupNodes.add(e.source);
+        groupNodes.add(e.target);
+      }
     }
-    setExpandedNodeIds(prev => {
-      const next = new Set(prev);
-      const collapse = prev.has(node.id);
-      for (const id of group) { if (collapse) next.delete(id); else next.add(id); }
-      return next;
+    setLineage(prev => {
+      if (prev && prev.nodes.size === groupNodes.size && [...groupNodes].every(id => prev.nodes.has(id))) {
+        return null;
+      }
+      return { nodes: groupNodes, edges: groupEdges };
     });
   }, [edges]);
 
