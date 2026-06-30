@@ -17,6 +17,24 @@ function App() {
     initSession();
   }, [initSession]);
 
+  // Global Esc "go back a level": close the column details panel, then the table
+  // details panel, then exit column-lineage tracing. Reads fresh store state so
+  // it needn't re-subscribe. `defaultPrevented` lets dialogs / popovers / the
+  // table search consume Esc first; preventing default signals lower-priority
+  // handlers (e.g. the canvas connector-selection) to stand down this press.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const s = useStore.getState();
+      if (s.view !== 'canvas') return;
+      if (s.selectedColumn) { s.selectColumn(null, null); e.preventDefault(); return; }
+      if (s.selectedNodeId) { s.selectNode(null); e.preventDefault(); return; }
+      if (s.columnFocus) { s.clearColumnFocus(); e.preventDefault(); return; }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   return (
     <div className="flex h-screen w-screen bg-slate-50 overflow-hidden text-left">
       <ProjectSidebar />

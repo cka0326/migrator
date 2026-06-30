@@ -171,6 +171,22 @@ function SystemCanvas({ system }: SystemCanvasProps) {
   // entering/leaving column-focus mode rebuilds them, so drop the highlight.
   useEffect(() => { setLineage(null); }, [columnFocus]);
 
+  // Esc clears the connector selection — but only as the last level. Effects run
+  // child-before-parent, so we can't rely on the global App handler running
+  // first; instead we defer explicitly whenever any higher level (a details
+  // panel or column focus) is still active, keeping the priority deterministic.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || !lineage) return;
+      const s = useStore.getState();
+      if (s.selectedColumn || s.selectedNodeId || s.columnFocus) return;
+      setLineage(null);
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [lineage]);
+
   // Re-derive nodes/edges with highlight + dimming applied. Returns the originals
   // untouched when nothing is highlighted.
   const displayNodes = useMemo(() => {
