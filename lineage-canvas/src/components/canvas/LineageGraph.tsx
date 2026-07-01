@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback, useState } from 'react';
+import { useEffect, useMemo, useCallback, useState, useRef } from 'react';
 import { ReactFlow, Controls, Background, MiniMap, Panel, useNodesState, useEdgesState, useReactFlow, BackgroundVariant, MarkerType } from '@xyflow/react';
 import type { Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -16,21 +16,6 @@ import type { System, TableEdge, ColumnEdge } from '../../types/models';
 
 const nodeTypes = { tableNode: CustomTableNode as any };
 const edgeTypes = { tableEdge: CustomTableEdge as any, columnEdge: CustomColumnEdge as any };
-
-// Pans/centers the viewport on the focused node whenever the column focus changes,
-// so re-rooting the trace on a downstream/upstream column brings it into view.
-function FocusCentering({ focusId }: { focusId: string | null }) {
-  const { getNode, getZoom, setCenter } = useReactFlow();
-  useEffect(() => {
-    if (!focusId) return;
-    const node = getNode(focusId);
-    if (!node) return;
-    const w = (node.measured?.width ?? node.width ?? 280);
-    const h = (node.measured?.height ?? node.height ?? 120);
-    setCenter(node.position.x + w / 2, node.position.y + h / 2, { zoom: getZoom(), duration: 500 });
-  }, [focusId, getNode, getZoom, setCenter]);
-  return null;
-}
 
 // Jump-to-table search for large graphs: type a name, pick a result, and the
 // viewport recenters on that table (and opens its details). Rendered inside
@@ -179,7 +164,9 @@ function SystemCanvas({ system }: SystemCanvasProps) {
   const [rfInstance, setRfInstance] = useState<any>(null);
   // When a connector is clicked we highlight just the two tables it directly
   // connects (and the connector itself), dimming the rest.
-  const [lineage, setLineage] = useState<{ nodes: Set<string>; edges: Set<string> } | null>(null);
+  // `reposition` distinguishes a deep-dive (double-click a table → isolate + re-lay-out
+  // its dependencies) from a light connector highlight (single edge click → dim in place).
+  const [lineage, setLineage] = useState<{ nodes: Set<string>; edges: Set<string>; hub?: string; reposition?: boolean } | null>(null);
   // Tables the user manually expanded via "+N more". Lifted out of the node so
   // the edge resolver can anchor their now-visible columns to real handles.
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
@@ -222,10 +209,8 @@ function SystemCanvas({ system }: SystemCanvasProps) {
       }
     }
     setLineage(prev => {
-      if (prev && prev.nodes.size === groupNodes.size && [...groupNodes].every(id => prev.nodes.has(id))) {
-        return null;
-      }
-      return { nodes: groupNodes, edges: groupEdges };
+      if (prev && prev.hub === node.id) return null; // double-clicking the same hub exits
+      return { nodes: groupNodes, edges: groupEdges, hub: node.id, reposition: true };
     });
   }, [edges]);
 
@@ -248,30 +233,6 @@ function SystemCanvas({ system }: SystemCanvasProps) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [lineage]);
-
-  // Re-derive nodes/edges with highlight + dimming + forced expansion applied.
-  // Returns the originals (stable refs) for nodes that need none of it.
-  const displayNodes = useMemo(() => {
-    if (!lineage && expandedNodeIds.size === 0) return nodes;
-    return nodes.map(n => {
-      const expanded = expandedNodeIds.has(n.id);
-      const highlight = !!lineage && lineage.nodes.has(n.id);
-      const dim = !!lineage && !lineage.nodes.has(n.id);
-      if (!expanded && !highlight && !dim) return n;
-      const data: any = { ...(n.data as any) };
-      if (expanded) data.forceExpanded = true;
-      if (highlight) data.lineageHighlight = true;
-      return dim ? { ...n, data, style: { ...(n.style as any), opacity: 0.3 } } : { ...n, data };
-    });
-  }, [nodes, lineage, expandedNodeIds]);
-
-  const displayEdges = useMemo(() => {
-    if (!lineage) return edges;
-    return edges.map(e => lineage.edges.has(e.id)
-      ? { ...e, animated: true, zIndex: 1000, data: { ...(e.data as any), lineageHighlight: true } }
-      // Drop the arrowhead on dimmed edges so faded lines don't keep solid markers.
-      : { ...e, markerEnd: undefined, data: { ...(e.data as any), lineageDimmed: true } });
-  }, [edges, lineage]);
 
   // The store already holds only the active canvas's data; filter to this system tab.
   const systemNodes = useMemo(() => {
@@ -306,6 +267,95 @@ function SystemCanvas({ system }: SystemCanvasProps) {
     }
     return map;
   }, [systemColumnEdges]);
+
+  // ----- Focus mode (column lineage OR a double-clicked table hub) -----
+  // The set of tables that participate in the current focus. When focus is active we
+  // show ONLY these tables, re-laid-out compactly and fit into the viewport, so a
+  // deep-dive stays legible even when the canvas has hundreds of tables. Exiting
+  // focus restores the normal grid + the prior viewport.
+  const focusIds = useMemo<Set<string> | null>(() => {
+    if (columnFocus) {
+      const ids = new Set<string>();
+      for (const id of Object.keys(tracedColumns)) if (storeNodes[id]?.system === system) ids.add(id);
+      if (storeNodes[columnFocus.datasetId]?.system === system) ids.add(columnFocus.datasetId);
+      return ids.size ? ids : null;
+    }
+    if (lineage?.reposition) return lineage.nodes;
+    return null;
+  }, [columnFocus, tracedColumns, lineage, storeNodes, system]);
+
+  // Compact positions for the focused tables: re-run the grid over just those tables
+  // and the edges among them (table edges + column-edge-derived adjacency).
+  const focusPositions = useMemo(() => {
+    if (!focusIds) return null;
+    const participants = nodes.filter(n => focusIds.has(n.id));
+    if (participants.length === 0) return null;
+    const fEdges: { id: string; source: string; target: string }[] = [];
+    for (const e of systemTableEdges) {
+      if (focusIds.has(e.fromDataset) && focusIds.has(e.toDataset)) fEdges.push({ id: e.edgeId, source: e.fromDataset, target: e.toDataset });
+    }
+    for (const e of systemColumnEdges) {
+      const t = e.target.datasetId;
+      for (const s of e.sources) {
+        if (t !== s.datasetId && focusIds.has(t) && focusIds.has(s.datasetId)) fEdges.push({ id: `cf-${s.datasetId}-${t}`, source: s.datasetId, target: t });
+      }
+    }
+    const map: Record<string, { x: number; y: number }> = {};
+    for (const n of gridLayout(participants as any, fEdges as any).nodes) map[n.id] = n.position!;
+    return map;
+  }, [focusIds, nodes, systemTableEdges, systemColumnEdges]);
+
+  // Re-derive nodes with focus repositioning/visibility OR forced expansion applied.
+  const displayNodes = useMemo(() => {
+    if (focusIds) {
+      return nodes.map(n => {
+        if (!focusIds.has(n.id)) return { ...n, hidden: true };
+        const data: any = { ...(n.data as any) };
+        // A double-clicked hub shows all its columns; its neighbours show just the
+        // columns that connect them. Column-lineage focus is handled inside the node
+        // (it already renders only traced columns).
+        if (lineage) {
+          data.lineageHighlight = true;
+          if (lineage.hub === n.id) data.forceExpanded = true;
+          else data.showConnectedOnly = true;
+        }
+        return {
+          ...n, hidden: false, data,
+          position: focusPositions?.[n.id] ?? n.position,
+          style: { ...(n.style as any), opacity: 1 },
+        };
+      });
+    }
+    // Light connector highlight (single edge click): highlight the two tables in
+    // place and dim the rest — no repositioning.
+    if (lineage) {
+      return nodes.map(n => {
+        if (lineage.nodes.has(n.id)) return { ...n, data: { ...(n.data as any), lineageHighlight: true } };
+        return { ...n, style: { ...(n.style as any), opacity: 0.3 } };
+      });
+    }
+    if (expandedNodeIds.size === 0) return nodes;
+    return nodes.map(n => {
+      if (!expandedNodeIds.has(n.id)) return n;
+      return { ...n, data: { ...(n.data as any), forceExpanded: true } };
+    });
+  }, [nodes, focusIds, focusPositions, lineage, expandedNodeIds]);
+
+  const displayEdges = useMemo(() => {
+    if (focusIds) {
+      // Show only edges between two focused tables; hide the rest.
+      return edges.map(e => {
+        const within = focusIds.has(e.source) && focusIds.has(e.target);
+        return within
+          ? { ...e, hidden: false, animated: true, zIndex: 1000, data: { ...(e.data as any), lineageHighlight: true } }
+          : { ...e, hidden: true };
+      });
+    }
+    if (!lineage) return edges;
+    return edges.map(e => lineage.edges.has(e.id)
+      ? { ...e, animated: true, zIndex: 1000, data: { ...(e.data as any), lineageHighlight: true } }
+      : { ...e, markerEnd: undefined, data: { ...(e.data as any), lineageDimmed: true } });
+  }, [edges, focusIds, lineage]);
 
   const initialNodes = useMemo(() => {
     const withConnected = (node: any) => ({
@@ -405,6 +455,27 @@ function SystemCanvas({ system }: SystemCanvasProps) {
     setEdges(initialEdges as any);
   }, [initialNodes, initialEdges, setNodes, setEdges]);
 
+  // Entering focus fits the viewport to just the focused tables; exiting restores the
+  // viewport we had before, so the graph returns to normal.
+  const focusKey = focusIds ? [...focusIds].sort().join(',') : '';
+  const prevViewport = useRef<{ x: number; y: number; zoom: number } | null>(null);
+  useEffect(() => {
+    if (!rfInstance) return;
+    if (focusKey) {
+      if (!prevViewport.current) prevViewport.current = rfInstance.getViewport();
+      const ids = focusKey.split(',').map(id => ({ id }));
+      // Let the repositioned nodes commit before fitting to them.
+      const t = setTimeout(() => rfInstance.fitView({ nodes: ids, padding: 0.25, duration: 500 }), 60);
+      return () => clearTimeout(t);
+    }
+    if (prevViewport.current) {
+      const vp = prevViewport.current;
+      prevViewport.current = null;
+      const t = setTimeout(() => rfInstance.setViewport(vp, { duration: 400 }), 0);
+      return () => clearTimeout(t);
+    }
+  }, [focusKey, rfInstance]);
+
   // "Auto Layout" re-applies the computed grid (discarding any drags) and re-fits.
   const onLayout = useCallback(() => {
     setNodes(initialNodes as any);
@@ -502,7 +573,6 @@ function SystemCanvas({ system }: SystemCanvasProps) {
           nodeStrokeWidth={2}
           nodeColor={(n) => ((n.data as any)?.system === 'LEGACY' ? '#93c5fd' : '#c4b5fd')}
         />
-        <FocusCentering focusId={columnFocus?.datasetId ?? null} />
         <ArrowKeyPan />
         <Panel position="top-left">
           <div className="flex flex-col gap-2">

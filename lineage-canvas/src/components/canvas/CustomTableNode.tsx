@@ -29,8 +29,11 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
 
   const { name, namespace, system, origin, columns, metadata, collapsed } = data as any;
   const connectedColumns = useMemo(() => new Set<string>((data as any).connectedColumns ?? []), [data]);
-  // A clicked connector expands both of its tables to show every column.
+  // A clicked connector / focused hub highlights (and expands) the table.
   const lineageHighlight = !!(data as any).lineageHighlight;
+  // A neighbour of a double-clicked hub: show only the columns that connect it,
+  // not every column (keeps the dependency view focused).
+  const showConnectedOnly = !!(data as any).showConnectedOnly;
   // Expanded via "+N more" or a table double-click. The canvas owns this state
   // (so hidden-column edges can re-anchor) and pushes it back down as a flag.
   const forceExpanded = !!(data as any).forceExpanded;
@@ -59,9 +62,14 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
   const isSearching = searchQuery.trim() !== '';
   // Show a compact preview of the first few columns; expand on demand ("+N more"
   // / double-click), while filtering, or when a clicked connector expanded it.
-  const showAllColumns = forceExpanded || isSearching || lineageHighlight;
-  const visibleColumns = showAllColumns ? sortedColumns : sortedColumns.slice(0, COLUMN_PREVIEW_LIMIT);
-  const hiddenColumnCount = sortedColumns.length - visibleColumns.length;
+  // A neighbour in a hub focus shows only its connecting columns; otherwise a
+  // highlighted/expanded/searching node shows all, and the default is a preview.
+  const connectedOnlyColumns = sortedColumns.filter((c: any) => connectedColumns.has(c.name));
+  const showAllColumns = forceExpanded || isSearching || (lineageHighlight && !showConnectedOnly);
+  const visibleColumns = showConnectedOnly
+    ? (connectedOnlyColumns.length ? connectedOnlyColumns : sortedColumns.slice(0, COLUMN_PREVIEW_LIMIT))
+    : showAllColumns ? sortedColumns : sortedColumns.slice(0, COLUMN_PREVIEW_LIMIT);
+  const hiddenColumnCount = showConnectedOnly ? 0 : sortedColumns.length - visibleColumns.length;
 
   // ----- Focus-mode derivations -----
   const isFocusMode = !!columnFocus;

@@ -61,9 +61,12 @@ function SelectContent({
   children,
   side = "bottom",
   sideOffset = 4,
-  align = "center",
+  align = "start",
   alignOffset = 0,
-  alignItemWithTrigger = true,
+  // Open the list *below* the trigger (like a normal dropdown) instead of overlaying
+  // it on the trigger. Overlaying made options — especially a lone option — sit under
+  // the trigger's chevron and be hard to click.
+  alignItemWithTrigger = false,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<
