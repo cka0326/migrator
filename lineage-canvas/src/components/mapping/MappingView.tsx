@@ -10,10 +10,12 @@ import {
   canvasStatus, tableMappingStatus, VALIDATION_STATES, VALIDATION_LABELS, DERIVED_COLORS,
 } from '../../lib/migrationStatus';
 import { COMPARABLE_FIELDS } from '../../lib/compare';
+import { openComparisonInNewTab } from '../../lib/ephemeralTab';
+import { VALIDATION_COLORS } from '../../lib/migrationStatus';
 import type { TableNode, ValidationState } from '../../types/models';
 import {
   ArrowLeft, Wand2, Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GitCompareArrows,
-  GitCompare, SlidersHorizontal, X,
+  SlidersHorizontal, X, ExternalLink,
 } from 'lucide-react';
 
 const tableLabel = (t: TableNode) => (t.namespace ? `${t.namespace}.${t.name}` : t.name);
@@ -40,7 +42,6 @@ export function MappingView() {
   const updateTableMapping = useStore(s => s.updateTableMapping);
   const deleteTableMapping = useStore(s => s.deleteTableMapping);
   const autoSuggestMappings = useStore(s => s.autoSuggestMappings);
-  const openEphemeralComparison = useStore(s => s.openEphemeralComparison);
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [newLegacy, setNewLegacy] = useState('');
@@ -191,6 +192,7 @@ export function MappingView() {
 
           {/* Create a new mapping */}
           <div className="border rounded-lg bg-white p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">Add a table mapping</div>
             <div className="grid grid-cols-[1fr_auto_1fr_auto] items-end gap-2">
               <div>
                 <label className="text-[11px] text-slate-500 font-medium">{legacyLabel} table (Legacy)</label>
@@ -227,6 +229,12 @@ export function MappingView() {
           </div>
 
           {/* Mapping cards */}
+          {mappingList.length > 0 && (
+            <div className="flex items-center gap-2 px-1 pt-1">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Table mappings</h3>
+              <span className="text-[10px] text-slate-400 tabular-nums">{filterState ? `${visibleMappings.length} of ${mappingList.length}` : mappingList.length}</span>
+            </div>
+          )}
           {mappingList.length === 0 ? (
             <div className="text-center text-slate-400 text-sm py-10">
               No table mappings yet. Use <span className="font-medium">Auto-suggest</span> or map a pair above.
@@ -246,7 +254,7 @@ export function MappingView() {
               const canCompare = !!legacyNode && !!targetNode && !!activeProjectId;
               const openTableCompare = () => {
                 if (!canCompare) return;
-                openEphemeralComparison({
+                openComparisonInNewTab({
                   mode: 'systems',
                   projectId: activeProjectId!,
                   title: `${tableLabel(legacyNode!)} ↔ ${tableLabel(targetNode!)}`,
@@ -257,57 +265,88 @@ export function MappingView() {
                 });
               };
               return (
-                <div key={m.id} className="border rounded-lg bg-white overflow-hidden">
-                  <div className="flex items-center gap-3 px-3 py-2.5">
-                    <button onClick={() => toggle(m.id)} className="text-slate-400 hover:text-slate-700 shrink-0">
-                      {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    </button>
-                    {/* legacy ↔ target with connector */}
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <div className="min-w-0 flex-1 text-right">
-                        <div className="text-sm font-medium font-mono truncate">{legacyNode ? tableLabel(legacyNode) : '∅ deleted'}</div>
-                        <div className="text-[10px] text-slate-400">{legacyLabel} · {st.legacyColumnCount} cols</div>
+                <div key={m.id} className="border rounded-lg bg-white overflow-hidden shadow-sm hover:shadow transition-shadow flex">
+                  {/* Derived-status accent bar */}
+                  <div className="w-1 shrink-0" style={{ background: color }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 px-3 py-2.5">
+                      <button onClick={() => toggle(m.id)} className="text-slate-400 hover:text-slate-700 shrink-0">
+                        {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      </button>
+                      {/* legacy ↔ target with connector */}
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 text-right">
+                          <div className="text-sm font-medium font-mono truncate">{legacyNode ? tableLabel(legacyNode) : '∅ deleted'}</div>
+                          <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                            <span className="text-[9px] font-semibold uppercase tracking-wide px-1 py-px rounded bg-blue-100 text-blue-700">{legacyLabel}</span>
+                            <span className="text-[10px] text-slate-400 tabular-nums">{st.legacyColumnCount} cols</span>
+                          </div>
+                        </div>
+                        <Connector color={color} />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium font-mono truncate">{targetNode ? tableLabel(targetNode) : '∅ deleted'}</div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[9px] font-semibold uppercase tracking-wide px-1 py-px rounded bg-teal-100 text-teal-700">{targetLabel}</span>
+                            <span className="text-[10px] text-slate-400 tabular-nums">{st.targetColumnCount} cols</span>
+                          </div>
+                        </div>
                       </div>
-                      <Connector color={color} />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium font-mono truncate">{targetNode ? tableLabel(targetNode) : '∅ deleted'}</div>
-                        <div className="text-[10px] text-slate-400">{targetLabel} · {st.targetColumnCount} cols</div>
+                      {/* status + coverage */}
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex flex-col items-end gap-1 w-24">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide"
+                              style={{ background: `${color}22`, color }}>{st.derived}</span>
+                            {st.typeMismatches.length > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 font-semibold" title={`${st.typeMismatches.length} type mismatch(es)`}>
+                                <AlertTriangle size={11} /> {st.typeMismatches.length}
+                              </span>
+                            )}
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden" title={`${st.columnCoveragePct}% of columns mapped`}>
+                            <div className="h-full rounded-full" style={{ width: `${st.columnCoveragePct}%`, background: color }} />
+                          </div>
+                          <span className="text-[10px] text-slate-400 tabular-nums">{st.columnCoveragePct}% cols mapped</span>
+                        </div>
+                        <Button
+                          size="xs" variant="outline" onClick={openTableCompare} disabled={!canCompare}
+                          title="Open this pair's table comparison in a new tab"
+                        >
+                          <ExternalLink className="mr-1" /> Compare
+                        </Button>
+                        <Select value={m.validationState} onValueChange={(v) => updateTableMapping(m.id, { validationState: v as ValidationState })}>
+                          <SelectTrigger className="h-7 text-xs w-[140px]">
+                            <SelectValue>
+                              {(v: string) => (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <i className="w-2 h-2 rounded-full inline-block" style={{ background: VALIDATION_COLORS[(v || 'NOT_STARTED') as ValidationState] }} />
+                                  {VALIDATION_LABELS[(v || 'NOT_STARTED') as ValidationState]}
+                                </span>
+                              )}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {VALIDATION_STATES.map(s => (
+                              <SelectItem key={s} value={s}>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <i className="w-2 h-2 rounded-full inline-block" style={{ background: VALIDATION_COLORS[s] }} />
+                                  {VALIDATION_LABELS[s]}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <button onClick={() => deleteTableMapping(m.id)} className="text-slate-400 hover:text-red-600" title="Delete mapping"><Trash2 size={14} /></button>
                       </div>
                     </div>
-                    {/* status chips */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide"
-                        style={{ background: `${color}22`, color }}>{st.derived}</span>
-                      <span className="text-[10px] text-slate-500 tabular-nums">{st.columnCoveragePct}% cols</span>
-                      {st.typeMismatches.length > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 font-medium">
-                          <AlertTriangle size={11} /> {st.typeMismatches.length}
-                        </span>
-                      )}
-                      <Button
-                        size="xs" variant="outline" onClick={openTableCompare} disabled={!canCompare}
-                        title="Open a temporary table comparison for this mapped pair"
-                      >
-                        <GitCompare className="mr-1" /> Compare
-                      </Button>
-                      <Select value={m.validationState} onValueChange={(v) => updateTableMapping(m.id, { validationState: v as ValidationState })}>
-                        <SelectTrigger className="h-7 text-xs w-[130px]">
-                          <SelectValue>{(v: string) => VALIDATION_LABELS[(v || 'NOT_STARTED') as ValidationState]}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {VALIDATION_STATES.map(s => <SelectItem key={s} value={s}>{VALIDATION_LABELS[s]}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <button onClick={() => deleteTableMapping(m.id)} className="text-slate-400 hover:text-red-600"><Trash2 size={14} /></button>
-                    </div>
+                    {isOpen && (
+                      <ColumnMappingEditor
+                        mapping={m} legacyNode={legacyNode} targetNode={targetNode}
+                        legacyLabel={legacyLabel} targetLabel={targetLabel}
+                        includedFields={includedFields}
+                      />
+                    )}
                   </div>
-                  {isOpen && (
-                    <ColumnMappingEditor
-                      mapping={m} legacyNode={legacyNode} targetNode={targetNode}
-                      legacyLabel={legacyLabel} targetLabel={targetLabel}
-                      includedFields={includedFields}
-                    />
-                  )}
                 </div>
               );
             })

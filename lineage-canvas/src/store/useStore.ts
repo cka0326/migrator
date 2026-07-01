@@ -7,6 +7,7 @@ import type { TableNode, ColumnDef, TableEdge, ColumnEdge, EditEvent, TableMetad
 import { ingestParsedModel } from '../db/ingestion';
 import type { ParsedImportModel, ImportTarget, ImportOptions, ImportSummary } from '../lib/importModel';
 import { columnEdgeId, tableEdgeId } from '../lib/edgeIds';
+import { readEphemeralComparisonFromUrl } from '../lib/ephemeralTab';
 
 export type AppView = 'canvas' | 'compare' | 'mapping';
 
@@ -93,8 +94,10 @@ interface AppState {
   saveComparison: (comparison: SavedComparison) => Promise<void>;
   deleteComparison: (id: string) => Promise<void>;
   openComparison: (projectId: string, comparisonId: string | null) => void;
-  // Open a read-only, unsavable comparison (from the Mapping view).
+  // Open a read-only, unsavable comparison (from the Mapping view / a new tab).
   openEphemeralComparison: (cmp: EphemeralComparison) => void;
+  // Open a canvas's Mapping view directly (loads the canvas first if needed).
+  openMapping: (canvasId: string) => Promise<void>;
 
   // Canvas table mappings (legacy ↔ target)
   createTableMapping: (legacyDatasetId: string, targetDatasetId: string) => Promise<string | null>;
@@ -262,6 +265,19 @@ export const useStore = create<AppState>()(
 
       initSession: async () => {
         await get().loadProjects();
+
+        // A "?compare=<id>" URL means this tab was opened to show a specific
+        // read-only comparison (see openComparisonInNewTab). Load its canvas and
+        // open it, bypassing the normal last-session restore.
+        const ephemeral = readEphemeralComparisonFromUrl();
+        if (ephemeral) {
+          const dsId = ephemeral.left?.datasetId ?? ephemeral.right?.datasetId
+            ?? ephemeral.columnPairs?.[0]?.left?.datasetId ?? null;
+          const canvasId = dsId ? dsId.slice(0, dsId.indexOf('::')) : null;
+          if (canvasId && get().canvases[canvasId]) await get().loadCanvas(canvasId);
+          get().openEphemeralComparison(ephemeral);
+          return;
+        }
 
         let saved: PersistedSession | null = null;
         try {
@@ -608,6 +624,11 @@ export const useStore = create<AppState>()(
 
       openEphemeralComparison: (cmp) =>
         set({ view: 'compare', activeProjectId: cmp.projectId, activeComparisonId: null, ephemeralComparison: cmp }),
+
+      openMapping: async (canvasId) => {
+        if (get().activeCanvasId !== canvasId) await get().loadCanvas(canvasId);
+        set({ view: 'mapping', activeComparisonId: null, ephemeralComparison: null });
+      },
 
       // ---------- Canvas table mappings ----------
       createTableMapping: async (legacyDatasetId, targetDatasetId) => {

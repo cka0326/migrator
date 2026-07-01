@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import {
-  FolderPlus, Plus, ChevronRight, ChevronLeft, ChevronDown, Trash2, GitCompare, Layers, Pencil, Copy, Share2, Upload,
+  FolderPlus, Plus, ChevronRight, ChevronLeft, ChevronDown, Trash2, GitCompare, GitCompareArrows, Layers, Pencil, Copy, Share2, Upload,
 } from 'lucide-react';
 import type { Project } from '../types/models';
 
@@ -73,6 +73,7 @@ function ProjectItem({ project }: { project: Project }) {
   const selectProject = useStore(state => state.selectProject);
   const setView = useStore(state => state.setView);
   const openComparison = useStore(state => state.openComparison);
+  const openMapping = useStore(state => state.openMapping);
   const deleteComparison = useStore(state => state.deleteComparison);
   const exportProject = useStore(state => state.exportProject);
   const exportComparison = useStore(state => state.exportComparison);
@@ -174,16 +175,25 @@ function ProjectItem({ project }: { project: Project }) {
           )}
           {projectCanvases.map(canvas => {
             const isActive = view === 'canvas' && activeCanvasId === canvas.id;
+            const isMappingActive = view === 'mapping' && activeCanvasId === canvas.id;
             return (
               <div
                 key={canvas.id}
                 className={`group/canvas flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer text-sm ${
-                  isActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 hover:bg-slate-100'
+                  isActive || isMappingActive ? 'bg-primary/10 text-primary font-medium' : 'text-slate-600 hover:bg-slate-100'
                 }`}
                 onClick={() => selectCanvas(canvas.id)}
               >
                 <Layers size={12} className="shrink-0 opacity-70" />
                 <span className="flex-1 truncate">{canvas.name}</span>
+                {/* Mapping is always reachable (not hover-only) so it reads as its own section. */}
+                <button
+                  title="Open mappings for this canvas"
+                  onClick={(e) => { e.stopPropagation(); openMapping(canvas.id); }}
+                  className={`shrink-0 p-0.5 rounded hover:text-primary ${isMappingActive ? 'text-primary bg-primary/10' : 'text-slate-400'}`}
+                >
+                  <GitCompareArrows size={12} />
+                </button>
                 <span className="flex items-center gap-0.5 opacity-0 group-hover/canvas:opacity-100">
                   <button
                     title="Duplicate canvas"

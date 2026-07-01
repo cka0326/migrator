@@ -146,7 +146,19 @@ function SystemCanvas({ system }: SystemCanvasProps) {
   const storeNodes = useStore(state => state.nodes);
   const storeTableEdges = useStore(state => state.tableEdges);
   const storeColumnEdges = useStore(state => state.columnEdges);
+  const mappings = useStore(state => state.mappings);
   const activeCanvasId = useStore(state => state.activeCanvasId);
+
+  // Each mapped table carries its table mapping's validation state so the node can
+  // reflect it (e.g. a validated pair turns green) — see CustomTableNode.
+  const validationByDataset = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const m of Object.values(mappings)) {
+      map[m.legacyDatasetId] = m.validationState;
+      map[m.targetDatasetId] = m.validationState;
+    }
+    return map;
+  }, [mappings]);
 
   const columnFocus = useStore(state => state.columnFocus);
   const tracedColumns = useStore(state => state.tracedColumns);
@@ -299,6 +311,7 @@ function SystemCanvas({ system }: SystemCanvasProps) {
     const withConnected = (node: any) => ({
       ...node,
       connectedColumns: [...(connectedColumnsByNode[node.datasetId] ?? [])],
+      mappingValidation: validationByDataset[node.datasetId],
       onToggleColumns,
     });
 
@@ -343,7 +356,7 @@ function SystemCanvas({ system }: SystemCanvasProps) {
     }
 
     return placedNodes;
-  }, [systemNodes, connectedColumnsByNode, onToggleColumns]);
+  }, [systemNodes, connectedColumnsByNode, onToggleColumns, validationByDataset]);
 
   const initialEdges = useMemo(() => {
     const isFocusMode = !!columnFocus;

@@ -6,6 +6,16 @@ import { Badge } from '../ui/badge';
 import { ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { prioritizeColumns, COLUMN_PREVIEW_LIMIT } from '../../lib/columnPreview';
+import { VALIDATION_LABELS } from '../../lib/migrationStatus';
+import type { ValidationState } from '../../types/models';
+
+// How a mapped table's validation state colours its node in the canvas.
+const VALIDATION_NODE: Record<ValidationState, { border: string; dot: string }> = {
+  NOT_STARTED: { border: '', dot: '' },
+  IN_PROGRESS: { border: 'border-blue-400', dot: 'bg-blue-400' },
+  VALIDATED: { border: 'border-emerald-500', dot: 'bg-emerald-500' },
+  ISSUE: { border: 'border-red-400', dot: 'bg-red-400' },
+};
 
 export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
   const selectNode = useStore(state => state.selectNode);
@@ -89,9 +99,18 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
   // lineage gets a blue ring (dimming of the rest is handled via node style).
   const lineageClasses = lineageHighlight ? 'ring-2 ring-blue-500 border-blue-400 shadow-md' : '';
 
+  // Table-mapping validation: a mapped table reflects its pair's validation state
+  // (e.g. a validated pair turns green) via its border + a header dot.
+  const mappingValidation = (data as any).mappingValidation as ValidationState | undefined;
+  const validation = mappingValidation && mappingValidation !== 'NOT_STARTED'
+    ? VALIDATION_NODE[mappingValidation] : undefined;
+  const baseBorder = origin === 'STUB'
+    ? 'border-dashed border-orange-300'
+    : (validation?.border || 'border-slate-300');
+
   return (
     <div
-      className={`bg-card border-2 rounded-lg shadow-sm w-[280px] text-left overflow-visible transition-shadow duration-150 hover:shadow-md ${origin === 'STUB' ? 'border-dashed border-orange-300' : 'border-slate-300'} ${focusClasses} ${selectedClasses} ${lineageClasses}`}
+      className={`bg-card border-2 rounded-lg shadow-sm w-[280px] text-left overflow-visible transition-shadow duration-150 hover:shadow-md ${baseBorder} ${focusClasses} ${selectedClasses} ${lineageClasses}`}
     >
       {/* Table-level Handles */}
       <Handle type="target" position={Position.Left} id="table-target" className="w-3 h-3 bg-slate-400 cursor-crosshair" />
@@ -118,7 +137,15 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
               {metadata?.rowCount != null && ` · ${Number(metadata.rowCount).toLocaleString()} rows`}
             </span>
           </div>
-          <Badge variant={system === 'LEGACY' ? 'default' : 'secondary'} className="text-[10px] px-1 py-0">{systemLabel}</Badge>
+          <div className="flex items-center gap-1 shrink-0">
+            {validation && (
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${validation.dot}`}
+                title={`Mapping: ${VALIDATION_LABELS[mappingValidation!]}`}
+              />
+            )}
+            <Badge variant={system === 'LEGACY' ? 'default' : 'secondary'} className="text-[10px] px-1 py-0">{systemLabel}</Badge>
+          </div>
         </div>
 
         <div className="flex justify-between items-center mt-1">

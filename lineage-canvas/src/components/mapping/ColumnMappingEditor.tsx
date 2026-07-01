@@ -11,7 +11,8 @@ import {
   type ColumnMappingImportResult,
 } from '../../lib/columnMappingExcel';
 import { downloadBlob, slugify } from '../../lib/download';
-import { Wand2, Plus, Trash2, ArrowRight, AlertTriangle, Check, Download, Upload, GitCompare } from 'lucide-react';
+import { openComparisonInNewTab } from '../../lib/ephemeralTab';
+import { Wand2, Plus, Trash2, ArrowRight, AlertTriangle, Check, Download, Upload, ExternalLink } from 'lucide-react';
 import type { TableNode, TableMapping, ColumnMappingPair } from '../../types/models';
 
 interface Props {
@@ -26,7 +27,6 @@ interface Props {
 export function ColumnMappingEditor({ mapping, legacyNode, targetNode, legacyLabel, targetLabel, includedFields }: Props) {
   const updateTableMapping = useStore(s => s.updateTableMapping);
   const autoSuggestColumns = useStore(s => s.autoSuggestColumns);
-  const openEphemeralComparison = useStore(s => s.openEphemeralComparison);
   const activeProjectId = useStore(s => s.activeProjectId);
   const [newLegacy, setNewLegacy] = useState<string>('');
   const [newTarget, setNewTarget] = useState<string>('');
@@ -67,10 +67,10 @@ export function ColumnMappingEditor({ mapping, legacyNode, targetNode, legacyLab
     setImportPreview(null);
   };
 
-  // Open a temporary "compare columns" view for this pair's mapped columns.
+  // Open a "compare columns" view (in a new tab) for this pair's mapped columns.
   const openColumnCompare = () => {
     if (!bothNodes || !activeProjectId) return;
-    openEphemeralComparison({
+    openComparisonInNewTab({
       mode: 'columns',
       projectId: activeProjectId,
       title: `${legacyNode!.name} ↔ ${targetNode!.name} columns`,
@@ -126,8 +126,8 @@ export function ColumnMappingEditor({ mapping, legacyNode, targetNode, legacyLab
           <input ref={fileRef} type="file" accept=".xlsx" className="hidden" onChange={handleFilePicked} />
           <Button size="xs" variant="outline" onClick={openColumnCompare}
             disabled={!bothNodes || mapping.columnMappings.length === 0}
-            title="Open a temporary column comparison for the mapped columns">
-            <GitCompare className="mr-1" /> Compare columns
+            title="Open a column comparison for the mapped columns in a new tab">
+            <ExternalLink className="mr-1" /> Compare columns
           </Button>
           <Button size="xs" variant="outline" onClick={clearAllPairs} disabled={mapping.columnMappings.length === 0}
             className="text-red-600 hover:text-red-700"
