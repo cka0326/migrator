@@ -197,18 +197,3 @@ export interface TableMapping {
   createdAt: string;
   updatedAt: string;
 }
-
-// ---------- Saved migration-status dashboards (top-level, outside projects) ----------
-// "canvas" = a single point-in-time snapshot; "trend" = progress across a project's
-// canvases over time. Referenced project/canvas may be deleted — render defensively.
-export type DashboardScope = "canvas" | "trend";
-
-export interface SavedDashboard {
-  id: string;                    // uuid
-  name: string;
-  scope: DashboardScope;
-  projectId: string;
-  canvasId?: string;             // required when scope === "canvas"
-  createdAt: string;
-  updatedAt: string;
-}

@@ -106,25 +106,56 @@ export function compareColumnPair(a: ColumnDef | null, b: ColumnDef | null, incl
 /**
  * Compare two tables column-by-column. Columns are matched by name
  * (case-insensitive). Side A is the left/"from" table, side B is the right/"to".
+ *
+ * `alignPairs`, when provided (from a table mapping's column pairs), aligns the
+ * given legacy→target columns as matched rows even when their names differ — so
+ * mapped-but-renamed columns are compared field-by-field instead of showing up as
+ * one removed + one added. Any columns not covered by a pair still fall back to
+ * name matching.
  */
-export function compareTables(a: TableNode | null, b: TableNode | null, included?: Set<string>): TableDiff {
+export function compareTables(
+  a: TableNode | null,
+  b: TableNode | null,
+  included?: Set<string>,
+  alignPairs?: { legacy: string; target: string }[],
+): TableDiff {
   const aCols = a?.columns ?? [];
   const bCols = b?.columns ?? [];
   const aByName = new Map(aCols.map(c => [c.name.toUpperCase(), c]));
   const bByName = new Map(bCols.map(c => [c.name.toUpperCase(), c]));
 
-  const names: string[] = [];
-  const seen = new Set<string>();
-  for (const c of aCols) { const k = c.name.toUpperCase(); if (!seen.has(k)) { seen.add(k); names.push(k); } }
-  for (const c of bCols) { const k = c.name.toUpperCase(); if (!seen.has(k)) { seen.add(k); names.push(k); } }
-  names.sort();
-
   const columns: ColumnDiff[] = [];
   const summary = { added: 0, removed: 0, changed: 0, same: 0 };
 
+  // Columns consumed by an explicit alignment pair, so name matching skips them.
+  const consumedA = new Set<string>();
+  const consumedB = new Set<string>();
+
+  for (const pair of alignPairs ?? []) {
+    const la = pair.legacy.toUpperCase();
+    const tb = pair.target.toUpperCase();
+    const ac = aByName.get(la);
+    const bc = bByName.get(tb);
+    if (!ac || !bc) continue; // endpoint missing — leave it to name matching
+    consumedA.add(la);
+    consumedB.add(tb);
+    const fields = fieldDiffs(ac, bc, included);
+    const changed = fields.some(f => f.changed);
+    // Display the mapping when the two sides were renamed.
+    const name = ac.name.toUpperCase() === bc.name.toUpperCase() ? ac.name : `${ac.name} → ${bc.name}`;
+    columns.push({ name, status: changed ? 'changed' : 'same', fields });
+    if (changed) summary.changed++; else summary.same++;
+  }
+
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const c of aCols) { const k = c.name.toUpperCase(); if (!consumedA.has(k) && !seen.has(k)) { seen.add(k); names.push(k); } }
+  for (const c of bCols) { const k = c.name.toUpperCase(); if (!consumedB.has(k) && !seen.has(k)) { seen.add(k); names.push(k); } }
+  names.sort();
+
   for (const name of names) {
-    const ac = aByName.get(name);
-    const bc = bByName.get(name);
+    const ac = consumedA.has(name) ? undefined : aByName.get(name);
+    const bc = consumedB.has(name) ? undefined : bByName.get(name);
 
     if (ac && bc) {
       const fields = fieldDiffs(ac, bc, included);

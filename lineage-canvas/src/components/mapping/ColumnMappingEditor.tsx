@@ -5,13 +5,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '../ui/dialog';
-import { dataTypesEquivalent } from '../../lib/dataTypes';
+import { compareColumnPair } from '../../lib/compare';
 import {
   buildColumnMappingWorkbook, columnMappingWorkbookToBlob, parseColumnMappingWorkbook,
   type ColumnMappingImportResult,
 } from '../../lib/columnMappingExcel';
 import { downloadBlob, slugify } from '../../lib/download';
-import { Wand2, Plus, Trash2, ArrowRight, AlertTriangle, Check, Download, Upload } from 'lucide-react';
+import { Wand2, Plus, Trash2, ArrowRight, AlertTriangle, Check, Download, Upload, GitCompare } from 'lucide-react';
 import type { TableNode, TableMapping, ColumnMappingPair } from '../../types/models';
 
 interface Props {
@@ -20,11 +20,14 @@ interface Props {
   targetNode?: TableNode;
   legacyLabel: string;
   targetLabel: string;
+  includedFields: Set<string>;
 }
 
-export function ColumnMappingEditor({ mapping, legacyNode, targetNode, legacyLabel, targetLabel }: Props) {
+export function ColumnMappingEditor({ mapping, legacyNode, targetNode, legacyLabel, targetLabel, includedFields }: Props) {
   const updateTableMapping = useStore(s => s.updateTableMapping);
   const autoSuggestColumns = useStore(s => s.autoSuggestColumns);
+  const openEphemeralComparison = useStore(s => s.openEphemeralComparison);
+  const activeProjectId = useStore(s => s.activeProjectId);
   const [newLegacy, setNewLegacy] = useState<string>('');
   const [newTarget, setNewTarget] = useState<string>('');
 
@@ -62,6 +65,21 @@ export function ColumnMappingEditor({ mapping, legacyNode, targetNode, legacyLab
       columnMappings: [...mapping.columnMappings, ...importPreview.result.newPairs],
     });
     setImportPreview(null);
+  };
+
+  // Open a temporary "compare columns" view for this pair's mapped columns.
+  const openColumnCompare = () => {
+    if (!bothNodes || !activeProjectId) return;
+    openEphemeralComparison({
+      mode: 'columns',
+      projectId: activeProjectId,
+      title: `${legacyNode!.name} ↔ ${targetNode!.name} columns`,
+      columnPairs: mapping.columnMappings.map(p => ({
+        left: { datasetId: mapping.legacyDatasetId, column: p.legacyColumn },
+        right: { datasetId: mapping.targetDatasetId, column: p.targetColumn },
+      })),
+      returnTo: 'mapping',
+    });
   };
 
   const legacyCols = legacyNode?.columns ?? [];
@@ -106,6 +124,11 @@ export function ColumnMappingEditor({ mapping, legacyNode, targetNode, legacyLab
             <Upload className="mr-1" /> Upload
           </Button>
           <input ref={fileRef} type="file" accept=".xlsx" className="hidden" onChange={handleFilePicked} />
+          <Button size="xs" variant="outline" onClick={openColumnCompare}
+            disabled={!bothNodes || mapping.columnMappings.length === 0}
+            title="Open a temporary column comparison for the mapped columns">
+            <GitCompare className="mr-1" /> Compare columns
+          </Button>
           <Button size="xs" variant="outline" onClick={clearAllPairs} disabled={mapping.columnMappings.length === 0}
             className="text-red-600 hover:text-red-700"
             title="Remove all column mappings for this table">
@@ -129,7 +152,9 @@ export function ColumnMappingEditor({ mapping, legacyNode, targetNode, legacyLab
           const lc = colByName(legacyCols, p.legacyColumn);
           const tc = colByName(targetCols, p.targetColumn);
           const missing = !lc || !tc;
-          const typeOk = !missing && dataTypesEquivalent(lc!.dataType, tc!.dataType);
+          // Count differences across the currently-selected compared fields.
+          const diffs = missing ? [] : compareColumnPair(lc!, tc!, includedFields).filter(f => f.changed);
+          const diffCount = diffs.length;
           return (
             <div key={`${p.legacyColumn}->${p.targetColumn}-${i}`}
               className="grid grid-cols-[1fr_auto_1fr_auto_auto] items-center gap-2 text-xs bg-white border rounded px-2 py-1.5">
@@ -144,10 +169,15 @@ export function ColumnMappingEditor({ mapping, legacyNode, targetNode, legacyLab
               </span>
               {missing ? (
                 <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-600"><AlertTriangle size={11} /> missing</span>
-              ) : typeOk ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600"><Check size={11} /> type ok</span>
+              ) : diffCount === 0 ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600"><Check size={11} /> match</span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600"><AlertTriangle size={11} /> type diff</span>
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600"
+                  title={diffs.map(f => f.field).join(', ')}
+                >
+                  <AlertTriangle size={11} /> {diffCount} diff{diffCount === 1 ? '' : 's'}
+                </span>
               )}
               <button onClick={() => removePair(i)} className="text-slate-400 hover:text-red-600"><Trash2 size={12} /></button>
             </div>

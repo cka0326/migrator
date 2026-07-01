@@ -3,12 +3,29 @@ import { temporal } from 'zundo';
 import { v4 as uuidv4 } from 'uuid';
 import { Repository } from '../db/repository';
 import { db } from '../db/database';
-import type { TableNode, ColumnDef, TableEdge, ColumnEdge, EditEvent, TableMetadata, ColumnMetadata, ColumnStat, Project, Canvas, System, SavedComparison, ComparisonEndpoint, TableMapping, ColumnMappingPair, ValidationState, SavedDashboard } from '../types/models';
+import type { TableNode, ColumnDef, TableEdge, ColumnEdge, EditEvent, TableMetadata, ColumnMetadata, ColumnStat, Project, Canvas, System, SavedComparison, ComparisonEndpoint, ComparisonMode, ColumnPair, TableMapping, ColumnMappingPair, ValidationState } from '../types/models';
 import { ingestParsedModel } from '../db/ingestion';
 import type { ParsedImportModel, ImportTarget, ImportOptions, ImportSummary } from '../lib/importModel';
 import { columnEdgeId, tableEdgeId } from '../lib/edgeIds';
 
-export type AppView = 'canvas' | 'compare' | 'mapping' | 'dashboard';
+export type AppView = 'canvas' | 'compare' | 'mapping';
+
+// A read-only comparison opened from the Mapping view (e.g. "compare this mapped
+// pair"). It reuses the Compare view's rendering but is never persisted, and the
+// user cannot save it. `alignPairs` (for table mode) tells the diff to align the
+// two tables' columns by the mapping's column pairs instead of by name, so mapped
+// columns are compared even when they were renamed. `returnTo` is where the
+// Compare view's back button goes.
+export interface EphemeralComparison {
+  mode: ComparisonMode;
+  projectId: string;
+  title: string;
+  left?: ComparisonEndpoint;
+  right?: ComparisonEndpoint;
+  columnPairs?: ColumnPair[];
+  alignPairs?: { legacy: string; target: string }[];
+  returnTo: AppView;
+}
 
 // Remembers which project/canvas/comparison was open so a page reload restores it.
 // Only the active selection lives here; the graph data itself is in IndexedDB.
@@ -18,7 +35,6 @@ interface PersistedSession {
   activeProjectId: string | null;
   activeCanvasId: string | null;
   activeComparisonId: string | null;
-  activeDashboardId: string | null;
   activeSystemTab: System;
 }
 
@@ -27,11 +43,11 @@ interface AppState {
   projects: Record<string, Project>;
   canvases: Record<string, Canvas>;
   comparisons: Record<string, SavedComparison>;
-  dashboards: Record<string, SavedDashboard>;
   activeProjectId: string | null;
   activeCanvasId: string | null;
   activeComparisonId: string | null;
-  activeDashboardId: string | null;
+  // Read-only comparison opened from the Mapping view (not saved). Null otherwise.
+  ephemeralComparison: EphemeralComparison | null;
   activeSystemTab: System;
   view: AppView;
 
@@ -77,6 +93,8 @@ interface AppState {
   saveComparison: (comparison: SavedComparison) => Promise<void>;
   deleteComparison: (id: string) => Promise<void>;
   openComparison: (projectId: string, comparisonId: string | null) => void;
+  // Open a read-only, unsavable comparison (from the Mapping view).
+  openEphemeralComparison: (cmp: EphemeralComparison) => void;
 
   // Canvas table mappings (legacy ↔ target)
   createTableMapping: (legacyDatasetId: string, targetDatasetId: string) => Promise<string | null>;
@@ -88,19 +106,11 @@ interface AppState {
   // Fill a mapping's column pairs by name match (non-destructive: keeps existing pairs).
   autoSuggestColumns: (mappingId: string) => Promise<void>;
 
-  // Saved dashboards (top-level)
-  loadDashboards: () => Promise<void>;
-  saveDashboard: (dashboard: SavedDashboard) => Promise<void>;
-  deleteDashboard: (id: string) => Promise<void>;
-  openDashboard: (dashboardId: string | null) => void;
-
   // Shareable bundles (.zip): download a project/comparison, or load one (additive).
   exportProject: (projectId: string) => Promise<void>;
   importProject: (file: File) => Promise<void>;
   exportComparison: (comparisonId: string) => Promise<void>;
   importComparison: (file: File) => Promise<void>;
-  exportDashboard: (dashboardId: string) => Promise<void>;
-  importDashboard: (file: File) => Promise<void>;
 
   selectNode: (id: string | null) => void;
   selectColumn: (datasetId: string | null, columnName: string | null) => void;
@@ -221,11 +231,10 @@ export const useStore = create<AppState>()(
       projects: {},
       canvases: {},
       comparisons: {},
-      dashboards: {},
       activeProjectId: null,
       activeCanvasId: null,
       activeComparisonId: null,
-      activeDashboardId: null,
+      ephemeralComparison: null,
       activeSystemTab: 'LEGACY',
       view: 'canvas',
 
@@ -242,23 +251,13 @@ export const useStore = create<AppState>()(
         const projectsArray = await Repository.getAllProjects();
         const canvasesArray = await Repository.getAllCanvases();
         const comparisonsArray = await Repository.getAllComparisons();
-        const dashboardsArray = await Repository.getAllDashboards();
         const projects: Record<string, Project> = {};
         for (const p of projectsArray) projects[p.id] = p;
         const canvases: Record<string, Canvas> = {};
         for (const c of canvasesArray) canvases[c.id] = c;
         const comparisons: Record<string, SavedComparison> = {};
         for (const c of comparisonsArray) comparisons[c.id] = c;
-        const dashboards: Record<string, SavedDashboard> = {};
-        for (const d of dashboardsArray) dashboards[d.id] = d;
-        set({ projects, canvases, comparisons, dashboards });
-      },
-
-      loadDashboards: async () => {
-        const dashboardsArray = await Repository.getAllDashboards();
-        const dashboards: Record<string, SavedDashboard> = {};
-        for (const d of dashboardsArray) dashboards[d.id] = d;
-        set({ dashboards });
+        set({ projects, canvases, comparisons });
       },
 
       initSession: async () => {
@@ -271,15 +270,7 @@ export const useStore = create<AppState>()(
         } catch { /* ignore corrupt/unavailable storage */ }
         if (!saved) return;
 
-        const { canvases, comparisons, dashboards } = get();
-
-        // Restore the dashboard tab (live or a saved dashboard) if applicable.
-        if (saved.view === 'dashboard') {
-          if (!saved.activeDashboardId || dashboards[saved.activeDashboardId]) {
-            get().openDashboard(saved.activeDashboardId ?? null);
-            return;
-          }
-        }
+        const { canvases, comparisons } = get();
 
         // Restore a saved comparison view if it still exists.
         if (saved.view === 'compare' && saved.activeComparisonId && comparisons[saved.activeComparisonId]) {
@@ -393,16 +384,11 @@ export const useStore = create<AppState>()(
           for (const id of Object.keys(comparisons)) {
             if (comparisons[id].projectId === projectId) delete comparisons[id];
           }
-          const dashboards = { ...state.dashboards };
-          for (const id of Object.keys(dashboards)) {
-            if (dashboards[id].projectId === projectId) delete dashboards[id];
-          }
           const wasActive = state.activeProjectId === projectId;
           return {
             projects,
             canvases,
             comparisons,
-            dashboards,
             activeProjectId: wasActive ? null : state.activeProjectId,
             activeCanvasId: wasActive ? null : state.activeCanvasId,
             nodes: wasActive ? {} : state.nodes,
@@ -455,7 +441,7 @@ export const useStore = create<AppState>()(
       },
 
       selectCanvas: async (canvasId) => {
-        set({ view: 'canvas', activeComparisonId: null, activeDashboardId: null });
+        set({ view: 'canvas', activeComparisonId: null, ephemeralComparison: null });
         await get().loadCanvas(canvasId);
       },
 
@@ -559,7 +545,7 @@ export const useStore = create<AppState>()(
 
       setActiveSystemTab: (system) => set({ activeSystemTab: system }),
 
-      setView: (view) => set({ view }),
+      setView: (view) => set({ view, ephemeralComparison: null }),
 
       // Bundle libs pull in xlsx/jszip — load them lazily so they're only fetched
       // when the user actually shares/imports (mirrors the Header upload flow).
@@ -618,7 +604,10 @@ export const useStore = create<AppState>()(
       },
 
       openComparison: (projectId, comparisonId) =>
-        set({ view: 'compare', activeProjectId: projectId, activeComparisonId: comparisonId, activeDashboardId: null }),
+        set({ view: 'compare', activeProjectId: projectId, activeComparisonId: comparisonId, ephemeralComparison: null }),
+
+      openEphemeralComparison: (cmp) =>
+        set({ view: 'compare', activeProjectId: cmp.projectId, activeComparisonId: null, ephemeralComparison: cmp }),
 
       // ---------- Canvas table mappings ----------
       createTableMapping: async (legacyDatasetId, targetDatasetId) => {
@@ -741,44 +730,6 @@ export const useStore = create<AppState>()(
         }
         if (!additions.length) return;
         await get().updateTableMapping(mappingId, { columnMappings: [...mapping.columnMappings, ...additions] });
-      },
-
-      // ---------- Saved dashboards ----------
-      saveDashboard: async (dashboard) => {
-        await Repository.saveDashboard(dashboard);
-        set((s) => ({
-          dashboards: { ...s.dashboards, [dashboard.id]: dashboard },
-          activeDashboardId: dashboard.id,
-        }));
-      },
-
-      deleteDashboard: async (id) => {
-        await Repository.deleteDashboard(id);
-        set((s) => {
-          const dashboards = { ...s.dashboards };
-          delete dashboards[id];
-          return {
-            dashboards,
-            activeDashboardId: s.activeDashboardId === id ? null : s.activeDashboardId,
-          };
-        });
-      },
-
-      openDashboard: (dashboardId) =>
-        set({ view: 'dashboard', activeDashboardId: dashboardId }),
-
-      exportDashboard: async (dashboardId) => {
-        const dashboard = get().dashboards[dashboardId];
-        if (!dashboard) return;
-        const { exportDashboardBundle } = await import('../lib/dashboardBundle');
-        await exportDashboardBundle(dashboard);
-      },
-
-      importDashboard: async (file) => {
-        const { importDashboardBundle } = await import('../lib/dashboardBundle');
-        const dash = await importDashboardBundle(file);
-        await get().loadProjects();
-        get().openDashboard(dash.id);
       },
 
       selectNode: (id) => set({ selectedNodeId: id }),
@@ -1398,7 +1349,6 @@ useStore.subscribe((state, prev) => {
     state.activeProjectId === prev.activeProjectId &&
     state.activeCanvasId === prev.activeCanvasId &&
     state.activeComparisonId === prev.activeComparisonId &&
-    state.activeDashboardId === prev.activeDashboardId &&
     state.activeSystemTab === prev.activeSystemTab
   ) return;
   try {
@@ -1407,7 +1357,6 @@ useStore.subscribe((state, prev) => {
       activeProjectId: state.activeProjectId,
       activeCanvasId: state.activeCanvasId,
       activeComparisonId: state.activeComparisonId,
-      activeDashboardId: state.activeDashboardId,
       activeSystemTab: state.activeSystemTab,
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));

@@ -7,7 +7,6 @@ import { LineageGraph } from './components/canvas/LineageGraph';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { CompareView } from './components/compare/CompareView';
 import { MappingView } from './components/mapping/MappingView';
-import { DashboardView } from './components/dashboard/DashboardView';
 
 function App() {
   const initSession = useStore(state => state.initSession);
@@ -43,8 +42,6 @@ function App() {
           <CompareView />
         ) : view === 'mapping' ? (
           <MappingView />
-        ) : view === 'dashboard' ? (
-          <DashboardView />
         ) : (
           <>
             <Header />

@@ -1,12 +1,11 @@
 import Dexie, { type Table } from 'dexie';
-import type { TableNode, ProcessRec, TableEdge, ColumnEdge, UploadRec, EditEvent, Project, Canvas, SavedComparison, TableMapping, SavedDashboard } from '../types/models';
+import type { TableNode, ProcessRec, TableEdge, ColumnEdge, UploadRec, EditEvent, Project, Canvas, SavedComparison, TableMapping } from '../types/models';
 
 export class LineageDatabase extends Dexie {
   projects!: Table<Project, string>; // id
   canvases!: Table<Canvas, string>; // id
   comparisons!: Table<SavedComparison, string>; // id
   tableMappings!: Table<TableMapping, string>; // id
-  dashboards!: Table<SavedDashboard, string>; // id
   tableNodes!: Table<TableNode, string>; // datasetId is the primary key
   processRecs!: Table<ProcessRec, string>; // processId
   tableEdges!: Table<TableEdge, string>; // edgeId
@@ -35,6 +34,11 @@ export class LineageDatabase extends Dexie {
     this.version(3).stores({
       tableMappings: 'id, canvasId, legacyDatasetId, targetDatasetId',
       dashboards: 'id, projectId'
+    });
+    // v4 retires the dashboard feature — the Mapping view covers migration status.
+    // Setting the store to null drops it (and its data) on upgrade.
+    this.version(4).stores({
+      dashboards: null
     });
   }
 }

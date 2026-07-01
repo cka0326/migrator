@@ -221,6 +221,7 @@ export function CompareView() {
   const canvases = useStore(state => state.canvases);
   const comparisons = useStore(state => state.comparisons);
   const activeComparisonId = useStore(state => state.activeComparisonId);
+  const ephemeral = useStore(state => state.ephemeralComparison);
   const saveComparison = useStore(state => state.saveComparison);
 
   const [mode, setMode] = useState<ComparisonMode>('systems');
@@ -327,31 +328,51 @@ export function CompareView() {
     }
   }, [activeComparisonId, comparisons, canvases]);
 
+  // Initialise from a read-only comparison opened from the Mapping view. Runs
+  // before the defaults below (which stand down while an ephemeral view is open).
+  useEffect(() => {
+    if (!ephemeral) return;
+    setMode(ephemeral.mode);
+    if (ephemeral.mode === 'columns') {
+      setPairs(ephemeral.columnPairs || []);
+    } else {
+      if (ephemeral.left?.datasetId) { setLeftCanvasId(canvasOf(ephemeral.left.datasetId)); setLeftTableId(ephemeral.left.datasetId); }
+      if (ephemeral.right?.datasetId) { setRightCanvasId(canvasOf(ephemeral.right.datasetId)); setRightTableId(ephemeral.right.datasetId); }
+    }
+  }, [ephemeral]);
+
   // Default canvas selections for the within-project mode.
   useEffect(() => {
+    if (ephemeral) return;
     if (projectCanvases.length === 0) return;
     setLeftCanvasId(prev => prev ?? projectCanvases[0].id);
     setRightCanvasId(prev => prev ?? (projectCanvases[1]?.id ?? projectCanvases[0].id));
-  }, [projectCanvases]);
+  }, [projectCanvases, ephemeral]);
 
   // Default project/canvas for the across-projects mode.
   useEffect(() => {
+    if (ephemeral) return;
     if (mode !== 'projects') return;
     setProjLeft(prev => prev.projectId ? prev : { projectId: activeProjectId ?? undefined, canvasId: projectCanvases[0]?.id });
     setProjRight(prev => prev.projectId ? prev : { projectId: activeProjectId ?? undefined, canvasId: projectCanvases[0]?.id });
-  }, [mode, activeProjectId, projectCanvases]);
+  }, [mode, activeProjectId, projectCanvases, ephemeral]);
 
   const leftTablesAll = leftCanvasId ? (tablesByCanvas[leftCanvasId] || []) : [];
   const rightTablesAll = rightCanvasId ? (tablesByCanvas[rightCanvasId] || []) : [];
   const leftFiltered = leftTablesAll.filter(t => t.system === 'LEGACY');
   const rightFiltered = rightTablesAll.filter(t => t.system === 'TARGET');
 
+  // Drop a selection only once the canvas's tables have actually loaded and it's
+  // genuinely absent — otherwise the async table fetch would clear a valid
+  // pre-selection (from a saved or ephemeral comparison) during the load window.
+  const leftLoaded = !!leftCanvasId && !!tablesByCanvas[leftCanvasId];
+  const rightLoaded = !!rightCanvasId && !!tablesByCanvas[rightCanvasId];
   useEffect(() => {
-    if (leftTableId && !leftFiltered.some(t => t.datasetId === leftTableId)) setLeftTableId(null);
-  }, [leftFiltered, leftTableId]);
+    if (leftLoaded && leftTableId && !leftFiltered.some(t => t.datasetId === leftTableId)) setLeftTableId(null);
+  }, [leftLoaded, leftFiltered, leftTableId]);
   useEffect(() => {
-    if (rightTableId && !rightFiltered.some(t => t.datasetId === rightTableId)) setRightTableId(null);
-  }, [rightFiltered, rightTableId]);
+    if (rightLoaded && rightTableId && !rightFiltered.some(t => t.datasetId === rightTableId)) setRightTableId(null);
+  }, [rightLoaded, rightFiltered, rightTableId]);
 
   const tableById = (datasetId?: string | null): TableNode | null =>
     datasetId ? ((tablesByCanvas[canvasOf(datasetId)] || []).find(t => t.datasetId === datasetId) ?? null) : null;
@@ -362,7 +383,10 @@ export function CompareView() {
   const rightTable = mode === 'projects'
     ? tableById(projRight.tableId)
     : (rightFiltered.find(t => t.datasetId === rightTableId) ?? null);
-  const diff = useMemo(() => compareTables(leftTable, rightTable, includedFields), [leftTable, rightTable, includedFields]);
+  const diff = useMemo(
+    () => compareTables(leftTable, rightTable, includedFields, ephemeral?.alignPairs),
+    [leftTable, rightTable, includedFields, ephemeral],
+  );
   const metaDiff = useMemo(() => compareTableMetadata(leftTable, rightTable), [leftTable, rightTable]);
   const metaChangedCount = metaDiff.filter(f => f.changed).length;
 
@@ -583,12 +607,17 @@ export function CompareView() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b bg-background">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setView('canvas')}>
-            <ArrowLeft size={15} className="mr-1" /> Back to canvas
+          <Button variant="ghost" size="sm" onClick={() => setView(ephemeral ? ephemeral.returnTo : 'canvas')}>
+            <ArrowLeft size={15} className="mr-1" /> {ephemeral ? 'Back to mapping' : 'Back to canvas'}
           </Button>
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
             <GitCompare size={16} /> Compare — {project.name}
-            {savedName && <span className="text-xs font-normal text-primary">· {savedName}</span>}
+            {ephemeral
+              ? <span className="text-xs font-normal text-slate-500 truncate max-w-[320px]">· {ephemeral.title}</span>
+              : savedName && <span className="text-xs font-normal text-primary">· {savedName}</span>}
+            {ephemeral && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Temporary</span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -653,9 +682,11 @@ export function CompareView() {
             </PopoverContent>
           </Popover>
 
-          <Button variant="outline" size="sm" onClick={handleSaveView}>
-            <Save size={14} className="mr-1" /> {savedName ? 'Update view' : 'Save view'}
-          </Button>
+          {!ephemeral && (
+            <Button variant="outline" size="sm" onClick={handleSaveView}>
+              <Save size={14} className="mr-1" /> {savedName ? 'Update view' : 'Save view'}
+            </Button>
+          )}
         </div>
       </div>
 

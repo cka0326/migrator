@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { db } from './database';
-import type { TableNode, UploadRec, EditEvent, Project, Canvas, SavedComparison, TableMapping, SavedDashboard } from '../types/models';
+import type { TableNode, UploadRec, EditEvent, Project, Canvas, SavedComparison, TableMapping } from '../types/models';
 
 export const Repository = {
   // ---------- Projects ----------
@@ -26,7 +26,6 @@ export const Repository = {
       await Repository.deleteCanvas(c.id);
     }
     await db.comparisons.where('projectId').equals(projectId).delete();
-    await db.dashboards.where('projectId').equals(projectId).delete();
     await db.projects.delete(projectId);
   },
 
@@ -58,23 +57,6 @@ export const Repository = {
 
   async deleteTableMapping(id: string) {
     await db.tableMappings.delete(id);
-  },
-
-  // ---------- Saved dashboards (top-level) ----------
-  async getAllDashboards() {
-    return db.dashboards.toArray();
-  },
-
-  async getDashboard(id: string) {
-    return db.dashboards.get(id);
-  },
-
-  async saveDashboard(dashboard: SavedDashboard) {
-    await db.dashboards.put(dashboard);
-  },
-
-  async deleteDashboard(id: string) {
-    await db.dashboards.delete(id);
   },
 
   // ---------- Canvases ----------
@@ -335,32 +317,6 @@ export const Repository = {
         await addMissing(db.tableEdges, g.tableEdges, 'edgeId');
         await addMissing(db.columnEdges, g.columnEdges, 'edgeId');
         await db.comparisons.put(g.comparison);
-      });
-  },
-
-  // A dashboard bundle keeps original ids: insert any referenced projects/canvases/
-  // tables/mappings that are MISSING locally, then add the dashboard record itself.
-  async saveImportedDashboard(g: {
-    dashboard: SavedDashboard;
-    projects: Project[];
-    canvases: Canvas[];
-    tableNodes: any[];
-    tableMappings: TableMapping[];
-  }) {
-    const addMissing = async (table: any, rows: any[], key: string) => {
-      if (!rows.length) return;
-      const found = await table.bulkGet(rows.map(r => r[key]));
-      const toAdd = rows.filter((_, i) => !found[i]);
-      if (toAdd.length) await table.bulkPut(toAdd);
-    };
-    await db.transaction('rw',
-      [db.projects, db.canvases, db.tableNodes, db.tableMappings, db.dashboards],
-      async () => {
-        await addMissing(db.projects, g.projects, 'id');
-        await addMissing(db.canvases, g.canvases, 'id');
-        await addMissing(db.tableNodes, g.tableNodes, 'datasetId');
-        await addMissing(db.tableMappings, g.tableMappings, 'id');
-        await db.dashboards.put(g.dashboard);
       });
   },
 

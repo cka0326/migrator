@@ -2,15 +2,18 @@ import { useMemo, useState } from 'react';
 import { useStore } from '../../store/useStore';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { ColumnMappingEditor } from './ColumnMappingEditor';
-import { Donut } from '../dashboard/charts/Donut';
-import { StackedBar } from '../dashboard/charts/StackedBar';
+import { Donut } from '../charts/Donut';
+import { StackedBar } from '../charts/StackedBar';
 import {
   canvasStatus, tableMappingStatus, VALIDATION_STATES, VALIDATION_LABELS, DERIVED_COLORS,
 } from '../../lib/migrationStatus';
+import { COMPARABLE_FIELDS } from '../../lib/compare';
 import type { TableNode, ValidationState } from '../../types/models';
 import {
   ArrowLeft, Wand2, Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GitCompareArrows,
+  GitCompare, SlidersHorizontal, X,
 } from 'lucide-react';
 
 const tableLabel = (t: TableNode) => (t.namespace ? `${t.namespace}.${t.name}` : t.name);
@@ -37,11 +40,22 @@ export function MappingView() {
   const updateTableMapping = useStore(s => s.updateTableMapping);
   const deleteTableMapping = useStore(s => s.deleteTableMapping);
   const autoSuggestMappings = useStore(s => s.autoSuggestMappings);
+  const openEphemeralComparison = useStore(s => s.openEphemeralComparison);
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [newLegacy, setNewLegacy] = useState('');
   const [newTarget, setNewTarget] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Filter the mapping list by clicking a validation-state legend entry.
+  const [filterState, setFilterState] = useState<ValidationState | null>(null);
+  // Which column-metadata fields count toward the diff (shared with the compare
+  // view; drives the per-pair "N diff" badges in each ColumnMappingEditor).
+  const [includedFields, setIncludedFields] = useState<Set<string>>(new Set(COMPARABLE_FIELDS));
+  const toggleField = (f: string) => setIncludedFields(prev => {
+    const next = new Set(prev);
+    next.has(f) ? next.delete(f) : next.add(f);
+    return next;
+  });
 
   const legacyLabel = project?.legacySystemName || 'Legacy';
   const targetLabel = project?.targetSystemName || 'Target';
@@ -53,6 +67,11 @@ export function MappingView() {
   );
   const status = useMemo(() => canvasStatus(nodeList, mappingList), [nodeList, mappingList]);
   const byId = useMemo(() => new Map(nodeList.map(n => [n.datasetId, n])), [nodeList]);
+  // The histogram always reflects every mapping; the list can be filtered by state.
+  const visibleMappings = useMemo(
+    () => (filterState ? mappingList.filter(m => m.validationState === filterState) : mappingList),
+    [mappingList, filterState],
+  );
 
   const mappedLegacy = new Set(mappingList.map(m => m.legacyDatasetId));
   const mappedTarget = new Set(mappingList.map(m => m.targetDatasetId));
@@ -101,9 +120,35 @@ export function MappingView() {
             <span className="text-xs font-normal text-slate-400 truncate">· {canvas.name}</span>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={handleAutoSuggest}>
-          <Wand2 className="mr-1" /> Auto-suggest mappings
-        </Button>
+        <div className="flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger render={<Button variant="outline" size="sm" />}>
+              <SlidersHorizontal size={14} className="mr-1" />
+              Compared fields ({includedFields.size}/{COMPARABLE_FIELDS.length})
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64 p-0">
+              <div className="flex items-center justify-between px-3 py-2 border-b">
+                <span className="text-xs font-semibold text-slate-700">Compared fields</span>
+                <div className="flex gap-1">
+                  <button className="text-[11px] text-primary hover:underline" onClick={() => setIncludedFields(new Set(COMPARABLE_FIELDS))}>All</button>
+                  <span className="text-slate-300">·</span>
+                  <button className="text-[11px] text-primary hover:underline" onClick={() => setIncludedFields(new Set())}>None</button>
+                </div>
+              </div>
+              <div className="max-h-72 overflow-y-auto py-1">
+                {COMPARABLE_FIELDS.map(f => (
+                  <label key={f} className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-slate-50 cursor-pointer">
+                    <input type="checkbox" className="accent-primary" checked={includedFields.has(f)} onChange={() => toggleField(f)} />
+                    <span className="text-slate-700">{f}</span>
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Button variant="outline" size="sm" onClick={handleAutoSuggest}>
+            <Wand2 className="mr-1" /> Auto-suggest mappings
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto p-4">
@@ -120,8 +165,27 @@ export function MappingView() {
               </div>
             </div>
             <div className="flex-1 min-w-[200px]">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Validation state</div>
-              <StackedBar hist={status.validationHistogram} />
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Validation state</div>
+                {filterState && (
+                  <button
+                    onClick={() => setFilterState(null)}
+                    className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                  >
+                    <X size={11} /> Clear filter
+                  </button>
+                )}
+              </div>
+              <StackedBar
+                hist={status.validationHistogram}
+                activeState={filterState}
+                onSelectState={(s) => setFilterState(prev => (prev === s ? null : s))}
+              />
+              {filterState && (
+                <div className="text-[11px] text-slate-500 mt-1">
+                  Showing {VALIDATION_LABELS[filterState]} · {visibleMappings.length} of {mappingList.length}
+                </div>
+              )}
             </div>
           </div>
 
@@ -167,13 +231,31 @@ export function MappingView() {
             <div className="text-center text-slate-400 text-sm py-10">
               No table mappings yet. Use <span className="font-medium">Auto-suggest</span> or map a pair above.
             </div>
+          ) : visibleMappings.length === 0 ? (
+            <div className="text-center text-slate-400 text-sm py-10">
+              No mappings are <span className="font-medium">{filterState ? VALIDATION_LABELS[filterState] : ''}</span>.{' '}
+              <button className="text-primary hover:underline" onClick={() => setFilterState(null)}>Clear filter</button>
+            </div>
           ) : (
-            mappingList.map(m => {
+            visibleMappings.map(m => {
               const legacyNode = byId.get(m.legacyDatasetId);
               const targetNode = byId.get(m.targetDatasetId);
               const st = tableMappingStatus(m, legacyNode, targetNode);
               const isOpen = expanded.has(m.id);
               const color = DERIVED_COLORS[st.derived];
+              const canCompare = !!legacyNode && !!targetNode && !!activeProjectId;
+              const openTableCompare = () => {
+                if (!canCompare) return;
+                openEphemeralComparison({
+                  mode: 'systems',
+                  projectId: activeProjectId!,
+                  title: `${tableLabel(legacyNode!)} ↔ ${tableLabel(targetNode!)}`,
+                  left: { datasetId: m.legacyDatasetId },
+                  right: { datasetId: m.targetDatasetId },
+                  alignPairs: m.columnMappings.map(p => ({ legacy: p.legacyColumn, target: p.targetColumn })),
+                  returnTo: 'mapping',
+                });
+              };
               return (
                 <div key={m.id} className="border rounded-lg bg-white overflow-hidden">
                   <div className="flex items-center gap-3 px-3 py-2.5">
@@ -202,6 +284,12 @@ export function MappingView() {
                           <AlertTriangle size={11} /> {st.typeMismatches.length}
                         </span>
                       )}
+                      <Button
+                        size="xs" variant="outline" onClick={openTableCompare} disabled={!canCompare}
+                        title="Open a temporary table comparison for this mapped pair"
+                      >
+                        <GitCompare className="mr-1" /> Compare
+                      </Button>
                       <Select value={m.validationState} onValueChange={(v) => updateTableMapping(m.id, { validationState: v as ValidationState })}>
                         <SelectTrigger className="h-7 text-xs w-[130px]">
                           <SelectValue>{(v: string) => VALIDATION_LABELS[(v || 'NOT_STARTED') as ValidationState]}</SelectValue>
@@ -217,6 +305,7 @@ export function MappingView() {
                     <ColumnMappingEditor
                       mapping={m} legacyNode={legacyNode} targetNode={targetNode}
                       legacyLabel={legacyLabel} targetLabel={targetLabel}
+                      includedFields={includedFields}
                     />
                   )}
                 </div>
