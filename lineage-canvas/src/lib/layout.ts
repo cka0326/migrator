@@ -13,7 +13,6 @@ import { COLUMN_PREVIEW_LIMIT } from './columnPreview';
 const NODE_WIDTH = 280;
 const H_GAP = 120;                 // horizontal gap between columns
 const V_GAP = 48;                  // vertical gap between stacked cards
-const COL_STRIDE = NODE_WIDTH + H_GAP;
 const BARYCENTER_SWEEPS = 4;
 
 // Height a card occupies in the canvas. Capped at the collapsed preview so layout
@@ -23,13 +22,25 @@ function estHeight(node: Node): number {
   return 80 + Math.min(cols, COLUMN_PREVIEW_LIMIT) * 32;
 }
 
+export interface GridLayoutOptions {
+  // Height each card occupies (override for focus views where cards are expanded).
+  heightOf?: (node: Node) => number;
+  hGap?: number;                   // horizontal gap between columns
+  vGap?: number;                   // vertical gap between stacked cards
+  centerColumns?: boolean;         // center each column vertically around y=0
+}
+
 const nodeName = (node: Node) => {
   const t = node.data as unknown as TableNode;
   return (t.namespace ? `${t.namespace}.${t.name}` : t.name) ?? node.id;
 };
 
-export function gridLayout(nodes: Node[], edges: Edge[]): { nodes: Node[] } {
+export function gridLayout(nodes: Node[], edges: Edge[], opts: GridLayoutOptions = {}): { nodes: Node[] } {
   if (nodes.length === 0) return { nodes };
+  const heightFn = opts.heightOf ?? estHeight;
+  const hGap = opts.hGap ?? H_GAP;
+  const vGap = opts.vGap ?? V_GAP;
+  const stride = NODE_WIDTH + hGap;
 
   const ids = new Set(nodes.map(n => n.id));
   // Keep only edges whose endpoints are both present; collapse duplicates.
@@ -100,11 +111,13 @@ export function gridLayout(nodes: Node[], edges: Edge[]): { nodes: Node[] } {
   const byId = new Map(nodes.map(n => [n.id, n]));
   const positions = new Map<string, { x: number; y: number }>();
   columns.forEach((col, l) => {
-    let y = 0;
-    for (const id of col) {
-      positions.set(id, { x: l * COL_STRIDE, y });
-      y += estHeight(byId.get(id)!) + V_GAP;
-    }
+    const heights = col.map(id => heightFn(byId.get(id)!));
+    const total = heights.reduce((s, h) => s + h, 0) + vGap * Math.max(0, col.length - 1);
+    let y = opts.centerColumns ? -total / 2 : 0;
+    col.forEach((id, i) => {
+      positions.set(id, { x: l * stride, y });
+      y += heights[i] + vGap;
+    });
   });
 
   return { nodes: nodes.map(n => ({ ...n, position: positions.get(n.id) ?? { x: 0, y: 0 } })) };

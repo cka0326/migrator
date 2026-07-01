@@ -300,10 +300,21 @@ function SystemCanvas({ system }: SystemCanvasProps) {
         if (t !== s.datasetId && focusIds.has(t) && focusIds.has(s.datasetId)) fEdges.push({ id: `cf-${s.datasetId}-${t}`, source: s.datasetId, target: t });
       }
     }
+    // Focus cards are expanded (no inner scroll), so lay them out using their real
+    // heights with generous spacing so column-to-column edges are readable.
+    const isCol = !!columnFocus;
+    const visibleCols = (id: string) => {
+      if (isCol) return tracedColumns[id]?.length ?? 1;
+      if (lineage?.hub === id) return storeNodes[id]?.columns.length ?? 1;   // hub: all columns
+      return connectedColumnsByNode[id]?.size || 1;                          // neighbour: connectors
+    };
+    const heightOf = (n: any) => (isCol ? 92 : 128) + Math.max(1, visibleCols(n.id)) * 30;
     const map: Record<string, { x: number; y: number }> = {};
-    for (const n of gridLayout(participants as any, fEdges as any).nodes) map[n.id] = n.position!;
+    for (const n of gridLayout(participants as any, fEdges as any, { heightOf, hGap: 280, vGap: 90, centerColumns: true }).nodes) {
+      map[n.id] = n.position!;
+    }
     return map;
-  }, [focusIds, nodes, systemTableEdges, systemColumnEdges]);
+  }, [focusIds, nodes, systemTableEdges, systemColumnEdges, columnFocus, tracedColumns, lineage, storeNodes, connectedColumnsByNode]);
 
   // Re-derive nodes with focus repositioning/visibility OR forced expansion applied.
   const displayNodes = useMemo(() => {
@@ -464,8 +475,8 @@ function SystemCanvas({ system }: SystemCanvasProps) {
     if (focusKey) {
       if (!prevViewport.current) prevViewport.current = rfInstance.getViewport();
       const ids = focusKey.split(',').map(id => ({ id }));
-      // Let the repositioned nodes commit before fitting to them.
-      const t = setTimeout(() => rfInstance.fitView({ nodes: ids, padding: 0.25, duration: 500 }), 60);
+      // Let the repositioned, full-height cards commit + be measured before fitting.
+      const t = setTimeout(() => rfInstance.fitView({ nodes: ids, padding: 0.25, duration: 500 }), 160);
       return () => clearTimeout(t);
     }
     if (prevViewport.current) {

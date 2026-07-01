@@ -70,6 +70,8 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
     ? (connectedOnlyColumns.length ? connectedOnlyColumns : sortedColumns.slice(0, COLUMN_PREVIEW_LIMIT))
     : showAllColumns ? sortedColumns : sortedColumns.slice(0, COLUMN_PREVIEW_LIMIT);
   const hiddenColumnCount = showConnectedOnly ? 0 : sortedColumns.length - visibleColumns.length;
+  // In any focus/expanded render, drop the inner scroll so all rows show at once.
+  const noScroll = forceExpanded || isSearching || lineageHighlight || showConnectedOnly || !!columnFocus;
 
   // ----- Focus-mode derivations -----
   const isFocusMode = !!columnFocus;
@@ -185,9 +187,10 @@ export function CustomTableNode({ data, id, selected }: NodeProps<any>) {
       {/* Columns. Clicking a column traces its lineage across the whole graph. */}
       {showBody && (
         <div className="flex flex-col text-xs font-mono bg-background rounded-b-md">
-          {/* Scroll region holds only the rows. `nowheel` stops React Flow from
-              hijacking the wheel for canvas zoom so the list scrolls normally. */}
-          <div className={bodyColumns.length > 6 ? 'flex flex-col max-h-[240px] overflow-y-auto nowheel' : 'flex flex-col'}>
+          {/* In a focus/expanded view every column is rendered full-height (so column
+              handles line up and edges anchor correctly). Otherwise a long preview
+              scrolls; `nowheel` stops React Flow from hijacking the wheel for zoom. */}
+          <div className={!noScroll && bodyColumns.length > 6 ? 'flex flex-col max-h-[240px] overflow-y-auto nowheel' : 'flex flex-col'}>
             {bodyColumns.map((col: any) => {
               const isFocusedCol = columnFocus?.datasetId === id && columnFocus?.column === col.name;
               return (
