@@ -1,9 +1,17 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useStore } from '../../store/useStore';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '../ui/dialog';
 import { dataTypesEquivalent } from '../../lib/dataTypes';
-import { Wand2, Plus, Trash2, ArrowRight, AlertTriangle, Check } from 'lucide-react';
+import {
+  buildColumnMappingWorkbook, columnMappingWorkbookToBlob, parseColumnMappingWorkbook,
+  type ColumnMappingImportResult,
+} from '../../lib/columnMappingExcel';
+import { downloadBlob, slugify } from '../../lib/download';
+import { Wand2, Plus, Trash2, ArrowRight, AlertTriangle, Check, Download, Upload } from 'lucide-react';
 import type { TableNode, TableMapping, ColumnMappingPair } from '../../types/models';
 
 interface Props {
@@ -19,6 +27,42 @@ export function ColumnMappingEditor({ mapping, legacyNode, targetNode, legacyLab
   const autoSuggestColumns = useStore(s => s.autoSuggestColumns);
   const [newLegacy, setNewLegacy] = useState<string>('');
   const [newTarget, setNewTarget] = useState<string>('');
+
+  // Excel column-mapping download/upload for this table pair.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importPreview, setImportPreview] = useState<
+    { fileName: string; result: ColumnMappingImportResult } | null
+  >(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const bothNodes = !!legacyNode && !!targetNode;
+
+  const handleDownloadExcel = () => {
+    if (!legacyNode || !targetNode) return;
+    const wb = buildColumnMappingWorkbook(mapping, legacyNode, targetNode, legacyLabel, targetLabel);
+    const blob = columnMappingWorkbookToBlob(wb);
+    downloadBlob(blob, `column-mapping_${slugify(legacyNode.name)}_to_${slugify(targetNode.name)}.xlsx`);
+  };
+
+  const handleFilePicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file || !legacyNode || !targetNode) return;
+    setImportError(null);
+    try {
+      const result = await parseColumnMappingWorkbook(file, mapping, legacyNode, targetNode);
+      setImportPreview({ fileName: file.name, result });
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Could not read the workbook.');
+    }
+  };
+
+  const applyImport = async () => {
+    if (!importPreview) return;
+    await updateTableMapping(mapping.id, {
+      columnMappings: [...mapping.columnMappings, ...importPreview.result.newPairs],
+    });
+    setImportPreview(null);
+  };
 
   const legacyCols = legacyNode?.columns ?? [];
   const targetCols = targetNode?.columns ?? [];
@@ -37,15 +81,44 @@ export function ColumnMappingEditor({ mapping, legacyNode, targetNode, legacyLab
     setNewLegacy(''); setNewTarget('');
   };
   const removePair = (i: number) => setPairs(mapping.columnMappings.filter((_, idx) => idx !== i));
+  const clearAllPairs = () => {
+    const n = mapping.columnMappings.length;
+    if (n === 0) return;
+    if (window.confirm(`Remove all ${n} column mapping${n === 1 ? '' : 's'} for this table? Table columns are not affected.`)) {
+      setPairs([]);
+    }
+  };
 
   return (
     <div className="px-4 py-3 bg-slate-50/70 border-t">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-2 gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Column mappings</span>
-        <Button size="xs" variant="outline" onClick={() => autoSuggestColumns(mapping.id)} disabled={!legacyNode || !targetNode}>
-          <Wand2 className="mr-1" /> Auto-match by name
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button size="xs" variant="outline" onClick={() => autoSuggestColumns(mapping.id)} disabled={!bothNodes}>
+            <Wand2 className="mr-1" /> Auto-match by name
+          </Button>
+          <Button size="xs" variant="outline" onClick={handleDownloadExcel} disabled={!bothNodes}
+            title="Download an Excel to map columns offline for this table pair">
+            <Download className="mr-1" /> Excel
+          </Button>
+          <Button size="xs" variant="outline" onClick={() => fileRef.current?.click()} disabled={!bothNodes}
+            title="Upload a filled column-mapping Excel">
+            <Upload className="mr-1" /> Upload
+          </Button>
+          <input ref={fileRef} type="file" accept=".xlsx" className="hidden" onChange={handleFilePicked} />
+          <Button size="xs" variant="outline" onClick={clearAllPairs} disabled={mapping.columnMappings.length === 0}
+            className="text-red-600 hover:text-red-700"
+            title="Remove all column mappings for this table">
+            <Trash2 className="mr-1" /> Clear all
+          </Button>
+        </div>
       </div>
+
+      {importError && (
+        <div className="text-xs text-red-600 mb-2 flex items-start gap-1">
+          <AlertTriangle size={12} className="mt-0.5 shrink-0" /> {importError}
+        </div>
+      )}
 
       {mapping.columnMappings.length === 0 && (
         <div className="text-xs text-slate-400 py-1">No column pairs yet — auto-match or add manually below.</div>
@@ -105,6 +178,44 @@ export function ColumnMappingEditor({ mapping, legacyNode, targetNode, legacyLab
         </Select>
         <Button size="xs" onClick={addPair} disabled={!newLegacy || !newTarget}><Plus /></Button>
       </div>
+
+      {/* Confirm before replacing this pair's column mappings with the uploaded file. */}
+      <Dialog open={!!importPreview} onOpenChange={(o) => { if (!o) setImportPreview(null); }}>
+        <DialogContent className="sm:max-w-md">
+          {importPreview && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Import column mappings</DialogTitle>
+                <DialogDescription>
+                  From <span className="font-mono">{importPreview.fileName}</span>. New pairs are added to the{' '}
+                  {mapping.columnMappings.length} existing column mapping{mapping.columnMappings.length === 1 ? '' : 's'} — nothing is replaced.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2 text-xs">
+                <div>
+                  <span className="font-semibold tabular-nums">{importPreview.result.addedCount}</span> new column mapping{importPreview.result.addedCount === 1 ? '' : 's'} to add
+                </div>
+                {importPreview.result.warnings.length > 0 && (
+                  <div className="max-h-40 overflow-auto rounded border bg-amber-50 p-2 text-amber-800 space-y-1">
+                    {importPreview.result.warnings.map((w, i) => (
+                      <div key={i} className="flex items-start gap-1"><AlertTriangle size={11} className="mt-0.5 shrink-0" /> {w}</div>
+                    ))}
+                  </div>
+                )}
+                {importPreview.result.addedCount === 0 && (
+                  <div className="text-slate-500">No new pairs found — existing mappings are already up to date.</div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" size="sm" onClick={() => setImportPreview(null)}>Cancel</Button>
+                <Button size="sm" onClick={applyImport} disabled={importPreview.result.addedCount === 0}>
+                  <Check className="mr-1" /> Add {importPreview.result.addedCount} mapping{importPreview.result.addedCount === 1 ? '' : 's'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

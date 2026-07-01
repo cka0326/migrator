@@ -538,25 +538,8 @@ export const useStore = create<AppState>()(
           newComparisons.push(newCmp);
         }
 
-        // Clone table mappings of every source canvas onto its copied canvas,
-        // remapping the canvas + dataset prefixes (column-pair names carry over).
-        for (const c of sourceCanvases) {
-          const newCanvasId = canvasIdMap[c.id];
-          const sourceMappings = await Repository.getTableMappingsByCanvas(c.id);
-          for (const m of sourceMappings) {
-            const newMapping: TableMapping = {
-              ...m,
-              id: uuidv4(),
-              canvasId: newCanvasId,
-              legacyDatasetId: remap(m.legacyDatasetId),
-              targetDatasetId: remap(m.targetDatasetId),
-              columnMappings: m.columnMappings.map(cp => ({ ...cp })),
-              createdAt: now,
-              updatedAt: now,
-            };
-            await Repository.saveTableMapping(newMapping);
-          }
-        }
+        // Table mappings are already cloned per-canvas by Repository.copyCanvasContents
+        // (called above), so they must not be copied again here or they would double up.
 
         set((state) => {
           const canvases = { ...state.canvases };

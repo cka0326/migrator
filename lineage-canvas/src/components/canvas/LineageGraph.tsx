@@ -498,7 +498,20 @@ function SystemCanvas({ system }: SystemCanvasProps) {
   }, [addTableEdge, addColumnEdge, activeCanvasId]);
 
   return (
-    <div className="w-full h-full relative">
+    <div
+      className="w-full h-full relative"
+      // Clicking a column to trace it gives DOM focus to the React Flow node, and
+      // React Flow treats Escape as a node-selection key — so it swallows the press
+      // before App.tsx's global Esc handler can exit the trace. Intercept Escape in
+      // the capture phase (before React Flow's node handler) to exit column focus.
+      onKeyDownCapture={(e) => {
+        if (e.key === 'Escape' && !e.defaultPrevented && columnFocus) {
+          clearColumnFocus();
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }}
+    >
       <ReactFlow
         nodes={displayNodes}
         edges={displayEdges}
