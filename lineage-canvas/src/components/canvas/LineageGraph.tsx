@@ -8,7 +8,7 @@ import { CustomTableNode } from './CustomTableNode';
 import { CustomTableEdge } from './CustomTableEdge';
 import { CustomColumnEdge } from './CustomColumnEdge';
 import { MergeTablesDialog } from '../MergeTablesDialog';
-import { getLayoutedElements } from '../../lib/layout';
+import { gridLayout } from '../../lib/layout';
 import { previewVisibleColumns } from '../../lib/columnPreview';
 import { Button } from '../ui/button';
 import { GitMerge, Search } from 'lucide-react';
@@ -164,8 +164,8 @@ function SystemCanvas({ system }: SystemCanvasProps) {
   const tracedColumns = useStore(state => state.tracedColumns);
   const clearColumnFocus = useStore(state => state.clearColumnFocus);
 
-  const updateTableNodePosition = useStore(state => state.updateTableNodePosition);
-  const updateTableNodePositions = useStore(state => state.updateTableNodePositions);
+  // Table positions are computed from the graph (see gridLayout), so manual drags
+  // are session-only and not persisted.
 
   const addTableEdge = useStore(state => state.addTableEdge);
   const addColumnEdge = useStore(state => state.addColumnEdge);
@@ -176,6 +176,7 @@ function SystemCanvas({ system }: SystemCanvasProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [rfInstance, setRfInstance] = useState<any>(null);
   // When a connector is clicked we highlight just the two tables it directly
   // connects (and the connector itself), dimming the rest.
   const [lineage, setLineage] = useState<{ nodes: Set<string>; edges: Set<string> } | null>(null);
@@ -307,7 +308,6 @@ function SystemCanvas({ system }: SystemCanvasProps) {
   }, [systemColumnEdges]);
 
   const initialNodes = useMemo(() => {
-    const placedNodes: any[] = [];
     const withConnected = (node: any) => ({
       ...node,
       connectedColumns: [...(connectedColumnsByNode[node.datasetId] ?? [])],
@@ -315,48 +315,18 @@ function SystemCanvas({ system }: SystemCanvasProps) {
       onToggleColumns,
     });
 
-    // First place all nodes that already have a position in the store
-    for (const node of systemNodes) {
-      if (node.position) {
-        placedNodes.push({
-          id: node.datasetId,
-          type: 'tableNode',
-          position: node.position,
-          data: withConnected(node),
-        });
-      }
-    }
-
-    // Sequentially compute positions for nodes that don't have one
-    for (const node of systemNodes) {
-      if (!node.position) {
-        const laneNodes = placedNodes;
-        let posX = 100;
-        let posY = 100;
-
-        if (laneNodes.length > 0) {
-          let maxX = 100;
-          let sumY = 0;
-          for (const ln of laneNodes) {
-            if (ln.position.x > maxX) maxX = ln.position.x;
-            sumY += ln.position.y;
-          }
-          posX = maxX + 320;
-          posY = Math.round(sumY / laneNodes.length);
-        }
-
-        const newNode = {
-          id: node.datasetId,
-          type: 'tableNode',
-          position: { x: posX, y: posY },
-          data: withConnected(node),
-        };
-        placedNodes.push(newNode);
-      }
-    }
-
-    return placedNodes;
-  }, [systemNodes, connectedColumnsByNode, onToggleColumns, validationByDataset]);
+    // Build the flow nodes, then let gridLayout place them from the graph structure
+    // (sources left, layered by depth, packed columns). Positions are derived — the
+    // store's saved positions are intentionally ignored (always auto-arrange).
+    const flowNodes = systemNodes.map(node => ({
+      id: node.datasetId,
+      type: 'tableNode',
+      position: { x: 0, y: 0 },
+      data: withConnected(node),
+    }));
+    const layoutEdges = systemTableEdges.map(e => ({ id: e.edgeId, source: e.fromDataset, target: e.toDataset }));
+    return gridLayout(flowNodes as any, layoutEdges as any).nodes;
+  }, [systemNodes, systemTableEdges, connectedColumnsByNode, onToggleColumns, validationByDataset]);
 
   const initialEdges = useMemo(() => {
     const isFocusMode = !!columnFocus;
@@ -435,31 +405,11 @@ function SystemCanvas({ system }: SystemCanvasProps) {
     setEdges(initialEdges as any);
   }, [initialNodes, initialEdges, setNodes, setEdges]);
 
-  const onLayout = useCallback(async () => {
-    const { nodes: layoutedNodes, edges: layoutedEdges } = await getLayoutedElements(nodes, edges);
-    setNodes(layoutedNodes as any);
-    setEdges(layoutedEdges as any);
-
-    const positions: Record<string, { x: number; y: number }> = {};
-    for (const n of layoutedNodes) {
-      if (n.position) {
-        positions[n.id] = n.position;
-      }
-    }
-    await updateTableNodePositions(positions);
-  }, [nodes, edges, setNodes, setEdges, updateTableNodePositions]);
-
-  // Auto layout on mount if no nodes have a position in the store
-  useEffect(() => {
-    const hasAnyPosition = systemNodes.some(n => n.position);
-    if (systemNodes.length > 0 && !hasAnyPosition) {
-      onLayout();
-    }
-  }, [systemNodes, onLayout]);
-
-  const onNodeDragStop = useCallback(async (_event: any, node: any) => {
-    await updateTableNodePosition(node.id, node.position);
-  }, [updateTableNodePosition]);
+  // "Auto Layout" re-applies the computed grid (discarding any drags) and re-fits.
+  const onLayout = useCallback(() => {
+    setNodes(initialNodes as any);
+    requestAnimationFrame(() => rfInstance?.fitView({ padding: 0.2, duration: 400 }));
+  }, [initialNodes, setNodes, rfInstance]);
 
   // Persist edge deletions to the store. The rendered edges are derived from the
   // store on every node move / re-render, so deleting only React Flow's local
@@ -531,7 +481,7 @@ function SystemCanvas({ system }: SystemCanvasProps) {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onEdgesDelete={onEdgesDelete}
-        onNodeDragStop={onNodeDragStop}
+        onInit={setRfInstance}
         onConnect={onConnect}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
